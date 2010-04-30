@@ -8,7 +8,7 @@ module HMType.AST
   , splitTApp
   , Pred
   , TParam(..)
-  , TVar
+  , TVar(..)
   , Qual(..)
   , Schema
 
