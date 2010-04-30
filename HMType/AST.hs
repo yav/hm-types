@@ -306,11 +306,7 @@ singleS (TV _ k) t
           k2 = kindOf t
 
 singleS v@(TV x _) t
-  | occurs t            = recursiveType v t
-    where occurs (TApp t1 t2)     = occurs t1 || occurs t2
-          occurs (TCon _)         = False
-          occurs (TGen _)         = False
-          occurs (TVar (TV y _))  = x == y
+  | v `S.member` freeTVars t = recursiveType v t
 
 singleS (TV x _) t = return (Su (M.singleton x t))
 
