@@ -1,8 +1,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Example.Haskell where
+module HMType.Example.Haskell where
 
-import AST
-import Sort
+import HMType.AST
+import HMType.Sort
 import Data.List(intersperse)
 
 -- Kinds -----------------------------------------------------------------------
@@ -70,7 +70,7 @@ instance HasKinds Type Kind where
 
 
 
-instance Linearize TCon where
+instance PPTCon TCon where
   ppTCon n TFun [t1,t2] = wrapUnless (n <= 5)
                         $ ppPrec 6 t1 . showString " -> " . ppPrec 5 t2
   ppTCon _ TList [t1]   = showChar '[' . pp t1 . showChar ']'

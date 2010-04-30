@@ -1,8 +1,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Example.Bits where
+module HMType.Example.Bits where
 
-import AST
-import Sort
+import HMType.AST
+import HMType.Sort
 
 -- Kinds -----------------------------------------------------------------------
 data KCon         = KFun            -- The kind of type constructors.
@@ -37,7 +37,6 @@ data TCon         = TFun            -- ^ The type of funciton values
                   | TSeq            -- ^ The type of sized sequences
                   | TBit            -- ^ The type of bits
                   | TNum Integer    -- ^ A numeric types (uninhabited)
-                  | TOne            -- ^ A singleton type
 
                   | PAdd
                   | PMul
@@ -64,9 +63,6 @@ tBit              = T (TCon TBit)
 tNum             :: Integer -> Type
 tNum n            = T (TCon (TNum n))
 
-tOne             :: Type -> Type
-tOne (T a)        = T (TCon TOne `TApp` a)
-
 
 instance KindOf TCon Kind where
   kindOf tcon =
@@ -75,7 +71,6 @@ instance KindOf TCon Kind where
       TSeq        -> kNum  `kFun` (kStar `kFun` kStar)
       TBit        -> kStar
       TNum _      -> kNum
-      TOne        -> kNum `kFun` kStar
 
       PAdd        -> three
       PMul        -> three
@@ -97,14 +92,13 @@ instance HasKinds Type Kind where
 
 
 
-instance Linearize TCon where
+instance PPTCon TCon where
   ppTCon n TFun [t1,t2] = wrapUnless (n <= 5)
                         $ ppPrec 6 t1 . showString " -> " . ppPrec 5 t2
   ppTCon n TSeq [t1,t2] = wrapUnless (n <= 6)
                         $ showChar '[' . pp t1 . showChar ']' . ppPrec 6 t2
   ppTCon _ TBit []      = showString "Bit"
   ppTCon _ (TNum n) []  = shows n
-  ppTCon _ TOne [t]     = showChar '`' . pp t
 
   -- XXX: rules to print arithmetic nicely
 
@@ -114,7 +108,6 @@ instance Linearize TCon where
                     TSeq   -> "[]"
                     TBit   -> "Bit"
                     TNum i -> show i
-                    TOne   -> "(`)"
 
                     PAdd   -> "(+)"
                     PMul   -> "(*)"

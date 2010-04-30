@@ -2,17 +2,52 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}   -- pfft
-module AST where
+module HMType.AST
+  ( -- * Types
+    HMType(..)
+  , splitTApp
+  , Pred
+  , TParam(..)
+  , TVar
+  , Qual(..)
+  , Schema
+
+  -- * Kinds
+  , IsKind(..)
+  , KindOf(..)
+  , HasKinds(..)
+
+  -- * Substitutions
+  , UnificationMonad(..)
+  , HasUVars(..)
+  , HasGVars(..)
+  , Subst
+  , lookupS
+  , compS
+  , emptyS
+  , singleS
+  , mgu
+
+  -- * Pretty printing
+  , PP(..)
+  , PPTCon(..)
+  , ppTApp
+  , wrapUnless
+  ) where
 
 import qualified Data.IntMap as M
 
+
+--------------------------------------------------------------------------------
 -- | Simple types.
-data HMType tc k  = TCon tc                           -- ^ HMType constructor
-                  | TApp (HMType tc k) (HMType tc k)  -- ^ HMType application
+data HMType tc k  = TCon tc                           -- ^ Type constructor
+                  | TApp (HMType tc k) (HMType tc k)  -- ^ Type application
                   | TVar (TVar k)                     -- ^ Unification variable
                   | TGen (TVar k)                     -- ^ Generic variable
                     deriving Eq
 
+-- | Split-off all type applications.
+-- The first component of the result will not be an application node.
 splitTApp :: HMType tc k -> (HMType tc k, [HMType tc k])
 splitTApp t  = split t []
   where split (TApp t1 t2) ts = split t1 (t2 : ts)
@@ -23,28 +58,41 @@ type Pred         = HMType
 
 -- | Type paramaters.
 data TParam k     = TParam String k
-                    deriving Eq
 
 -- | Type variables.
--- This is used for both unifciation and generic variables. 
+-- This type is used for both unifciation and generic variables. 
 data TVar k       = TV Int (TParam k)
-                    deriving Eq
+
+-- | The type of qualified entities.
+data Qual tc k a    = Forall [TParam k] [Pred tc k] a
+
+-- | A schema is qualified type.
+type Schema tc k    = Qual tc k (HMType tc k)
 
 
-class KindOf t k | t -> k where
-  kindOf :: t -> k
+instance Eq (TVar k) where
+  TV x _ == TV y _ = x == y
 
-instance KindOf (TParam k) k where
-  kindOf (TParam _ k) = k
-
-instance KindOf (TVar k) k where
-  kindOf (TV _ p) = kindOf p
+instance Ord (TVar k) where
+  compare (TV x _) (TV y _) = compare x y
+--------------------------------------------------------------------------------
 
 
+-- | Identifies kinds that correspond to kind functions.
 class Eq k => IsKind k where
   isKFun :: k -> Maybe (k,k)
 
-instance (IsKind k, KindOf tc k) => KindOf (HMType tc k) k where
+-- | This class defines a method for accessing the kind of something.
+class IsKind k => KindOf t k | t -> k where
+  kindOf :: t -> k
+
+instance IsKind k => KindOf (TParam k) k where
+  kindOf (TParam _ k) = k
+
+instance IsKind k => KindOf (TVar k) k where
+  kindOf (TV _ p) = kindOf p
+
+instance KindOf tc k => KindOf (HMType tc k) k where
   kindOf ty =
     case ty of
       TCon tcon   -> kindOf tcon
@@ -56,17 +104,14 @@ instance (IsKind k, KindOf tc k) => KindOf (HMType tc k) k where
           _           -> error "BUG: Malformed type."
 
 
-data Qual tc k a    = Forall [TParam k] [Pred tc k] a
-type Schema tc k    = Qual tc k (HMType tc k)
-
-
 
 
 --------------------------------------------------------------------------------
 
 -- | Fill-in some of the unfication variables in something.
 class HasUVars t tc k | t -> tc k where
-  apS :: Subst tc k -> t -> t
+  apS       :: Subst tc k -> t -> t
+  -- freeTVars :: t -> Set
 
 instance HasUVars (HMType tc k) tc k where
   apS su ty =
@@ -169,17 +214,20 @@ class PP t where
   ppPrec _  = pp
   pp        = ppPrec 0
 
+class PPTCon tc where
+  ppTCon    :: Int -> tc -> [HMType tc k] -> ShowS
+
+
+
 instance PP (TParam k) where
   pp (TParam s _) = showString s
 
 instance PP (TVar k) where
   pp (TV _ p)     = pp p
 
-class Linearize tc where
-  ppTCon    :: Int -> tc -> [HMType tc k] -> ShowS
 
 
-instance Linearize tc => PP (HMType tc k) where
+instance PPTCon tc => PP (HMType tc k) where
   ppPrec n ty =
     case t of
       TVar tvar -> ppTApp n (showChar '?' . pp tvar) ts
@@ -199,7 +247,7 @@ wrapUnless :: Bool -> ShowS -> ShowS
 wrapUnless p xs = if p then xs else showChar '(' . xs . showChar ')'
 
 
-instance (Linearize tc, PP t) => PP (Qual tc k t) where
+instance (PPTCon tc, PP t) => PP (Qual tc k t) where
   ppPrec n (Forall _ [] t)      = ppPrec n t
   ppPrec 0 (Forall _ (p:ps) t)  = wrapUnless (null ps) (preds p ps)
                                 . showString " => " . pp t
@@ -209,8 +257,10 @@ instance (Linearize tc, PP t) => PP (Qual tc k t) where
   ppPrec _ p = showChar '(' . pp p . showChar ')'
 --------------------------------------------------------------------------------
 
+
+
 -- Substitutions ---------------------------------------------------------------
-class (Monad m, IsKind k, KindOf tc k, Eq tc) => UnificationMonad m k tc
+class (Monad m, KindOf tc k, Eq tc) => UnificationMonad m k tc
   | m -> k tc where
   kindMismatch  :: k -> k -> m a
   typeMismatch  :: HMType tc k -> HMType tc k -> m a
@@ -244,16 +294,19 @@ emptyS = Su M.empty
 singleS :: UnificationMonad m k tc => TVar k -> HMType tc k -> m (Subst tc k)
 singleS x (TVar y)
   | x == y              = return emptyS
+
 singleS (TV _ k) t
   | k1 /= k2            = kindMismatch k1 k2
     where k1 = kindOf k
           k2 = kindOf t
+
 singleS v@(TV x _) t
   | occurs t            = recursiveType v t
     where occurs (TApp t1 t2)     = occurs t1 || occurs t2
           occurs (TCon _)         = False
           occurs (TGen _)         = False
           occurs (TVar (TV y _))  = x == y
+
 singleS (TV x _) t = return (Su (M.singleton x t))
 
 --------------------------------------------------------------------------------

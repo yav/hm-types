@@ -1,6 +1,6 @@
-module Sort where
+module HMType.Sort where
 
-import AST
+import HMType.AST
 
 data Sort = Sort deriving Eq
 
