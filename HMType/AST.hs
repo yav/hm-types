@@ -271,7 +271,6 @@ class (Monad m, KindOf tc k, Eq tc) => UnificationMonad m k tc
   kindMismatch  :: k -> k -> m a
   typeMismatch  :: HMType tc k -> HMType tc k -> m a
   recursiveType :: TVar k -> HMType tc k -> m a
-  undefinedTVar :: String -> m a
 
 newtype Subst tc k      = Su (M.IntMap (HMType tc k))
 
