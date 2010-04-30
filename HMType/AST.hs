@@ -219,7 +219,7 @@ data TConApp tc k = TConApp tc [ HMType tc k ]
 
 instance Pretty k => Pretty (TParam k) where
   pPrintPrec (PrettyLevel 0) _ (TParam s _) = text s
-  pPrintPrec (PrettyLevel l) n (TParam s k) =
+  pPrintPrec (PrettyLevel l) _ (TParam s k) =
     parens (text s <+> text "::" <+> pPrintPrec (PrettyLevel (l-1)) 0 k)
 
 instance Pretty k => Pretty (TVar k) where
