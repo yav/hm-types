@@ -217,13 +217,15 @@ instance (HasKinds tc k, HasKinds t k) => HasKinds (Qual tc k t) k where
 
 data TConApp tc k = TConApp tc [ HMType tc k ]
 
-instance Pretty (TParam k) where
-  pPrint (TParam s _) = text s
+instance Pretty k => Pretty (TParam k) where
+  pPrintPrec (PrettyLevel 0) _ (TParam s _) = text s
+  pPrintPrec (PrettyLevel l) n (TParam s k) =
+    parens (text s <+> text "::" <+> pPrintPrec (PrettyLevel (l-1)) 0 k)
 
-instance Pretty (TVar k) where
+instance Pretty k => Pretty (TVar k) where
   pPrintPrec l n (TV _ p) = pPrintPrec l n p
 
-instance Pretty (TConApp tc k) => Pretty (HMType tc k) where
+instance (Pretty k, Pretty (TConApp tc k)) => Pretty (HMType tc k) where
   pPrintPrec l n ty =
     case t of
       TVar tvar -> prettyTApp l n (char '?' <> pPrintPrec l 0 tvar) ts
@@ -238,7 +240,8 @@ prettyTApp :: Pretty a => PrettyLevel -> Rational -> Doc -> [a] -> Doc
 prettyTApp l n f ps = prettyParen (not (null ps) && n >= 9)
                         (f <+> fsep (map (pPrintPrec l 9) ps))
 
-instance (Pretty (TConApp tc k), Pretty t) => Pretty (Qual tc k t) where
+instance (Pretty (TConApp tc k), Pretty k, Pretty t) 
+                                          => Pretty (Qual tc k t) where
   pPrintPrec l n (Forall _ [] t)  = pPrintPrec l n t
   pPrintPrec l n (Forall _ ps t)  = prettyParen (n /= 0)
                                      (preds <+> text "=>" <+> pPrintPrec l 0 t)

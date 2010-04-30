@@ -27,6 +27,20 @@ kPred             = K (TCon KPred)
 instance IsKind Kind where
   isKFun (K (TCon KFun `TApp` a `TApp` b))  = Just (K a, K b)
   isKFun _                                  = Nothing
+
+instance Pretty (TConApp KCon Sort) where
+
+  pPrintPrec l n (TConApp KFun [t1,t2]) = prettyParen (n > 5) $
+    pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
+
+  pPrintPrec l n (TConApp t ts) = prettyTApp l n (text short) ts 
+    where short = case t of
+                    KFun  -> "(->)"
+                    KStar -> "*"
+                    KPred -> "prop"
+
+instance Pretty Kind where
+  pPrintPrec l n (K k) = pPrintPrec l n k
 --------------------------------------------------------------------------------
 
 
