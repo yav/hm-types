@@ -3,7 +3,7 @@ module HMType.Example.Haskell where
 
 import HMType.AST
 import HMType.Sort
-import Data.List(intersperse)
+import Text.PrettyPrint
 
 -- Kinds -----------------------------------------------------------------------
 data KCon         = KFun            -- The kind of type constructors.
@@ -72,15 +72,11 @@ instance HasKinds Type Kind where
 
 instance PPTCon TCon where
   ppTCon n TFun [t1,t2] = wrapUnless (n <= 5)
-                        $ ppPrec 6 t1 . showString " -> " . ppPrec 5 t2
-  ppTCon _ TList [t1]   = showChar '[' . pp t1 . showChar ']'
+                        $ ppPrec 6 t1 <+> text "->" <+> ppPrec 5 t2
+  ppTCon _ TList [t1]   = brackets (pp t1)
   ppTCon _ (TTuple n) ts | length ts == n
-                        = wrapUnless False
-                        $ foldr (.) id
-                        $ intersperse (showChar ',')
-                        $ map pp ts
-
-  ppTCon n t ts        = ppTApp n (showString short) ts 
+                        = parens $ fsep $ punctuate comma $ map pp ts
+  ppTCon n t ts         = ppTApp n (text short) ts 
     where short = case t of
                     TFun      -> "(->)"
                     TList     -> "[]"

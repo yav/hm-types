@@ -3,6 +3,7 @@ module HMType.Example.Bits where
 
 import HMType.AST
 import HMType.Sort
+import Text.PrettyPrint
 
 -- Kinds -----------------------------------------------------------------------
 data KCon         = KFun            -- The kind of type constructors.
@@ -94,15 +95,16 @@ instance HasKinds Type Kind where
 
 instance PPTCon TCon where
   ppTCon n TFun [t1,t2] = wrapUnless (n <= 5)
-                        $ ppPrec 6 t1 . showString " -> " . ppPrec 5 t2
+                        $ ppPrec 6 t1 <+> text "->" <+> ppPrec 5 t2
   ppTCon n TSeq [t1,t2] = wrapUnless (n <= 6)
-                        $ showChar '[' . pp t1 . showChar ']' . ppPrec 6 t2
-  ppTCon _ TBit []      = showString "Bit"
-  ppTCon _ (TNum n) []  = shows n
+                        $ brackets (pp t1) <> ppPrec 6 t2
+  ppTCon _ TBit []      = text "Bit"
+  ppTCon _ (TNum n) []  = integer n
+
 
   -- XXX: rules to print arithmetic nicely
 
-  ppTCon n t ts         = ppTApp n (showString short) ts
+  ppTCon n t ts         = ppTApp n (text short) ts
     where short = case t of
                     TFun   -> "(->)"
                     TSeq   -> "[]"

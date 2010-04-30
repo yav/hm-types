@@ -36,6 +36,7 @@ module HMType.AST
   ) where
 
 import qualified Data.IntMap as M
+import Text.PrettyPrint
 
 
 --------------------------------------------------------------------------------
@@ -206,21 +207,21 @@ instance (HasKinds tc k, HasKinds t k) => HasKinds (Qual tc k t) k where
 class PP t where
   ppPrec :: Int           -- ^ Precedence
          -> t
-         -> ShowS
+         -> Doc
 
-  pp     :: t -> ShowS
+  pp     :: t -> Doc
 
   -- defaults
   ppPrec _  = pp
   pp        = ppPrec 0
 
 class PPTCon tc where
-  ppTCon    :: Int -> tc -> [HMType tc k] -> ShowS
+  ppTCon    :: Int -> tc -> [HMType tc k] -> Doc
 
 
 
 instance PP (TParam k) where
-  pp (TParam s _) = showString s
+  pp (TParam s _) = text s
 
 instance PP (TVar k) where
   pp (TV _ p)     = pp p
@@ -230,7 +231,7 @@ instance PP (TVar k) where
 instance PPTCon tc => PP (HMType tc k) where
   ppPrec n ty =
     case t of
-      TVar tvar -> ppTApp n (showChar '?' . pp tvar) ts
+      TVar tvar -> ppTApp n (char '?' <> pp tvar) ts
       TGen tvar -> ppTApp n (pp tvar) ts
       TCon tcon -> ppTCon n tcon ts
       TApp _ _  -> error "BUG: 'splitTApp' returned an applications"
@@ -238,23 +239,17 @@ instance PPTCon tc => PP (HMType tc k) where
     where
     (t,ts)    = splitTApp ty
 
-ppTApp :: PP a => Int -> ShowS -> [a] -> ShowS
-ppTApp n f ps = wrapUnless (null ps || n < 9) (f . foldr ppParam id ps)
-  where ppParam p next = showChar ' ' . ppPrec 9 p . next
+ppTApp :: PP a => Int -> Doc -> [a] -> Doc
+ppTApp n f ps = wrapUnless (null ps || n < 9) (f <+> fsep (map (ppPrec 9) ps))
 
-
-wrapUnless :: Bool -> ShowS -> ShowS
-wrapUnless p xs = if p then xs else showChar '(' . xs . showChar ')'
+wrapUnless :: Bool -> Doc -> Doc
+wrapUnless p xs = if p then xs else parens xs
 
 
 instance (PPTCon tc, PP t) => PP (Qual tc k t) where
-  ppPrec n (Forall _ [] t)      = ppPrec n t
-  ppPrec 0 (Forall _ (p:ps) t)  = wrapUnless (null ps) (preds p ps)
-                                . showString " => " . pp t
-    where preds a []      = pp a 
-          preds a (q:qs)  = pp a . showString ", " . preds q qs
-
-  ppPrec _ p = showChar '(' . pp p . showChar ')'
+  ppPrec n (Forall _ [] t)  = ppPrec n t
+  ppPrec n (Forall _ ps t)  = wrapUnless (n == 0) (preds <+> text "=>" <+> pp t)
+    where preds = parens $ hsep $ punctuate comma $ map pp ps
 --------------------------------------------------------------------------------
 
 
