@@ -1,9 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 module HMType.Example.Haskell where
 
 import HMType.AST
 import HMType.Sort
-import Text.PrettyPrint
+import Text.PrettyPrint.HughesPJClass
 
 -- Kinds -----------------------------------------------------------------------
 data KCon         = KFun            -- The kind of type constructors.
@@ -70,13 +71,18 @@ instance HasKinds Type Kind where
 
 
 
-instance PPTCon TCon where
-  ppTCon n TFun [t1,t2] = wrapUnless (n <= 5)
-                        $ ppPrec 6 t1 <+> text "->" <+> ppPrec 5 t2
-  ppTCon _ TList [t1]   = brackets (pp t1)
-  ppTCon _ (TTuple n) ts | length ts == n
-                        = parens $ fsep $ punctuate comma $ map pp ts
-  ppTCon n t ts         = ppTApp n (text short) ts 
+instance Pretty (TConApp TCon Kind) where
+
+  pPrintPrec l n (TConApp TFun [t1,t2]) = prettyParen (n > 5) $
+    pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
+
+  pPrintPrec l _ (TConApp TList [t1]) =
+    brackets (pPrintPrec l 0 t1)
+
+  pPrintPrec l _ (TConApp (TTuple n) ts) | length ts == n =
+    parens $ fsep $ punctuate comma $ map (pPrintPrec l 0) ts
+
+  pPrintPrec l n (TConApp t ts) = prettyTApp l n (text short) ts 
     where short = case t of
                     TFun      -> "(->)"
                     TList     -> "[]"
@@ -85,6 +91,6 @@ instance PPTCon TCon where
                     TTuple a  -> "(" ++ replicate a ',' ++ ")"
                     TUser s _ -> s
 
-instance PP Type where
-  ppPrec n (T t)  = ppPrec n t
+instance Pretty Type where
+  pPrintPrec l n (T t)  = pPrintPrec l n t
 

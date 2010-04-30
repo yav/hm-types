@@ -29,15 +29,13 @@ module HMType.AST
   , mgu
 
   -- * Pretty printing
-  , PP(..)
-  , PPTCon(..)
-  , ppTApp
-  , wrapUnless
+  , TConApp(..)
+  , prettyTApp
   ) where
 
 import qualified Data.IntMap as M
 import qualified Data.Set as S
-import Text.PrettyPrint
+import Text.PrettyPrint.HughesPJClass
 
 
 --------------------------------------------------------------------------------
@@ -47,6 +45,7 @@ data HMType tc k  = TCon tc                           -- ^ Type constructor
                   | TVar (TVar k)                     -- ^ Unification variable
                   | TGen (TVar k)                     -- ^ Generic variable
                     deriving Eq
+
 
 -- | Split-off all type applications.
 -- The first component of the result will not be an application node.
@@ -215,52 +214,35 @@ instance (HasKinds tc k, HasKinds t k) => HasKinds (Qual tc k t) k where
 
 
 --------------------------------------------------------------------------------
-class PP t where
-  ppPrec :: Int           -- ^ Precedence
-         -> t
-         -> Doc
 
-  pp     :: t -> Doc
+data TConApp tc k = TConApp tc [ HMType tc k ]
 
-  -- defaults
-  ppPrec _  = pp
-  pp        = ppPrec 0
+instance Pretty (TParam k) where
+  pPrint (TParam s _) = text s
 
-class PPTCon tc where
-  ppTCon    :: Int -> tc -> [HMType tc k] -> Doc
+instance Pretty (TVar k) where
+  pPrintPrec l n (TV _ p) = pPrintPrec l n p
 
-
-
-instance PP (TParam k) where
-  pp (TParam s _) = text s
-
-instance PP (TVar k) where
-  pp (TV _ p)     = pp p
-
-
-
-instance PPTCon tc => PP (HMType tc k) where
-  ppPrec n ty =
+instance Pretty (TConApp tc k) => Pretty (HMType tc k) where
+  pPrintPrec l n ty =
     case t of
-      TVar tvar -> ppTApp n (char '?' <> pp tvar) ts
-      TGen tvar -> ppTApp n (pp tvar) ts
-      TCon tcon -> ppTCon n tcon ts
+      TVar tvar -> prettyTApp l n (char '?' <> pPrintPrec l 0 tvar) ts
+      TGen tvar -> prettyTApp l n (pPrintPrec l 0 tvar) ts
+      TCon tcon -> pPrintPrec l n (TConApp tcon ts)
       TApp _ _  -> error "BUG: 'splitTApp' returned an applications"
 
     where
     (t,ts)    = splitTApp ty
 
-ppTApp :: PP a => Int -> Doc -> [a] -> Doc
-ppTApp n f ps = wrapUnless (null ps || n < 9) (f <+> fsep (map (ppPrec 9) ps))
+prettyTApp :: Pretty a => PrettyLevel -> Rational -> Doc -> [a] -> Doc
+prettyTApp l n f ps = prettyParen (not (null ps) && n >= 9)
+                        (f <+> fsep (map (pPrintPrec l 9) ps))
 
-wrapUnless :: Bool -> Doc -> Doc
-wrapUnless p xs = if p then xs else parens xs
-
-
-instance (PPTCon tc, PP t) => PP (Qual tc k t) where
-  ppPrec n (Forall _ [] t)  = ppPrec n t
-  ppPrec n (Forall _ ps t)  = wrapUnless (n == 0) (preds <+> text "=>" <+> pp t)
-    where preds = parens $ hsep $ punctuate comma $ map pp ps
+instance (Pretty (TConApp tc k), Pretty t) => Pretty (Qual tc k t) where
+  pPrintPrec l n (Forall _ [] t)  = pPrintPrec l n t
+  pPrintPrec l n (Forall _ ps t)  = prettyParen (n /= 0)
+                                     (preds <+> text "=>" <+> pPrintPrec l 0 t)
+    where preds = parens $ hsep $ punctuate comma $ map (pPrintPrec l 0) ps
 --------------------------------------------------------------------------------
 
 
@@ -305,7 +287,7 @@ singleS (TV _ k) t
     where k1 = kindOf k
           k2 = kindOf t
 
-singleS v@(TV x _) t
+singleS v t
   | v `S.member` freeTVars t = recursiveType v t
 
 singleS (TV x _) t = return (Su (M.singleton x t))

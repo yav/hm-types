@@ -3,7 +3,10 @@ Version:        0.1
 License:        BSD3
 Author:         Iavor S. Diatchki
 Maintainer:     iavor.diatchki@gmail.com
-Build-Depends:  base < 5, containers, pretty
+Build-Depends:
+  base < 5,
+  containers,
+  prettyclass
 Build-type:     Simple
 Exposed-modules:
   HMType.AST

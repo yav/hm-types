@@ -1,9 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 module HMType.Example.Bits where
 
 import HMType.AST
 import HMType.Sort
-import Text.PrettyPrint
+import Text.PrettyPrint.HughesPJClass
 
 -- Kinds -----------------------------------------------------------------------
 data KCon         = KFun            -- The kind of type constructors.
@@ -93,18 +94,21 @@ instance HasKinds Type Kind where
 
 
 
-instance PPTCon TCon where
-  ppTCon n TFun [t1,t2] = wrapUnless (n <= 5)
-                        $ ppPrec 6 t1 <+> text "->" <+> ppPrec 5 t2
-  ppTCon n TSeq [t1,t2] = wrapUnless (n <= 6)
-                        $ brackets (pp t1) <> ppPrec 6 t2
-  ppTCon _ TBit []      = text "Bit"
-  ppTCon _ (TNum n) []  = integer n
+instance Pretty (TConApp TCon Kind) where
 
+  pPrintPrec l n (TConApp TFun [t1,t2]) = prettyParen (n > 5)
+    $ pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
+
+  pPrintPrec l n (TConApp TSeq [t1,t2]) = prettyParen (n > 6)
+    $ brackets (pPrintPrec l 0 t1) <> pPrintPrec l 6 t2
+
+  pPrintPrec _ _ (TConApp TBit []) = text "Bit"
+
+  pPrintPrec l n (TConApp (TNum x) []) = pPrintPrec l n x
 
   -- XXX: rules to print arithmetic nicely
 
-  ppTCon n t ts         = ppTApp n (text short) ts
+  pPrintPrec l n (TConApp t ts) = prettyTApp l n (text short) ts
     where short = case t of
                     TFun   -> "(->)"
                     TSeq   -> "[]"
@@ -116,6 +120,6 @@ instance PPTCon TCon where
                     PExp   -> "(**)"
                     PLeq   -> "(<=)"
 
-instance PP Type where
-  ppPrec n (T t)  = ppPrec n t
+instance Pretty Type where
+  pPrintPrec l n (T t)  = pPrintPrec l n t
 
