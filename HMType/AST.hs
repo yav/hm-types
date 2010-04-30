@@ -36,6 +36,7 @@ module HMType.AST
   ) where
 
 import qualified Data.IntMap as M
+import qualified Data.Set as S
 import Text.PrettyPrint
 
 
@@ -112,7 +113,7 @@ instance KindOf tc k => KindOf (HMType tc k) k where
 -- | Fill-in some of the unfication variables in something.
 class HasUVars t tc k | t -> tc k where
   apS       :: Subst tc k -> t -> t
-  -- freeTVars :: t -> Set
+  freeTVars :: t -> S.Set (TVar k)
 
 instance HasUVars (HMType tc k) tc k where
   apS su ty =
@@ -125,11 +126,21 @@ instance HasUVars (HMType tc k) tc k where
       TGen _      -> ty
       TCon _      -> ty
 
+  freeTVars ty =
+    case ty of
+      TVar tvar   -> S.singleton tvar
+      TApp t1 t2  -> S.union (freeTVars t1) (freeTVars t2)
+      TGen _      -> S.empty
+      TCon _      -> S.empty
+
+
 instance HasUVars t tc k => HasUVars [t] tc k where
-  apS su xs  = map (apS su) xs
+  apS su xs     = map (apS su) xs
+  freeTVars xs  = S.unions (map freeTVars xs)
 
 instance HasUVars t tc k => HasUVars (Qual tc k t) tc k where
-  apS su (Forall as ps t) = Forall as (apS su ps) (apS su t)
+  apS su (Forall as ps t)   = Forall as (apS su ps) (apS su t)
+  freeTVars (Forall _ ps t) = S.union (freeTVars ps) (freeTVars t)
 
 
 
