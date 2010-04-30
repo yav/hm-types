@@ -14,4 +14,9 @@ Exposed-modules:
   HMType.Example.Haskell
   HMType.Example.Bits
 GHC-options:    -O2 -Wall
+Extensions:
+  MultiParamTypeClasses
+  FlexibleInstances
+  FunctionalDependencies
+  UndecidableInstances
 
