@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}   -- pfft
 module HMType.AST
   ( -- * Types
@@ -18,15 +19,16 @@ module HMType.AST
   , HasKinds(..)
 
   -- * Substitutions
-  , UnificationMonad(..)
   , HasUVars(..)
   , HasGVars(..)
   , Subst
   , lookupS
   , compS
+  , mergeS
   , emptyS
   , singleS
   , mgu
+  , match
 
   -- * Pretty printing
   , TConApp(..)
@@ -184,7 +186,7 @@ instance HasGVars t tc k => HasGVars (Qual tc k t) tc k where
 --------------------------------------------------------------------------------
 -- Kinds, the types of types
 
-
+-- | Apply a function to all the kinds in the given entity.
 class HasKinds t k | t -> k where
   mapKinds :: (k -> k) -> t -> t
 
@@ -215,6 +217,8 @@ instance (HasKinds tc k, HasKinds t k) => HasKinds (Qual tc k t) k where
 
 --------------------------------------------------------------------------------
 
+-- | An application of a constructor to some types.
+-- Used for pretty-printing.
 data TConApp tc k = TConApp tc [ HMType tc k ]
 
 instance Pretty k => Pretty (TParam k) where
@@ -251,49 +255,96 @@ instance (Pretty (TConApp tc k), Pretty k, Pretty t)
 
 
 -- Substitutions ---------------------------------------------------------------
-class (Monad m, KindOf tc k, Eq tc) => UnificationMonad m k tc
-  | m -> k tc where
-  kindMismatch  :: k -> k -> m a
-  typeMismatch  :: HMType tc k -> HMType tc k -> m a
-  recursiveType :: TVar k -> HMType tc k -> m a
 
+-- | What may go wrong when we try to bind a type variable to a type.
+data TVarBindError  = KindMismatch | RecursiveType
+
+-- | What may go wrong while computing the most general unifier of two types.
+data MguError tc k  = TVarBindError TVarBindError (TVar k) (HMType tc k)
+                    | TypeMismatch (HMType tc k) (HMType tc k)
+
+-- | A substitution associating type variables with terms.
 newtype Subst tc k      = Su (M.IntMap (HMType tc k))
 
+-- | Find the binding for a unfication variable, if any.
 lookupS :: TVar k -> Subst tc k -> Maybe (HMType tc k)
 lookupS (TV x _) (Su m) = M.lookup x m
 
-
-mgu :: UnificationMonad m k tc
-    => HMType tc k -> HMType tc k -> m (Subst tc k)
-mgu (TVar x) t = singleS x t
-mgu t (TVar x) = singleS x t
+-- | Compute the most general unifier of two terms, if possible.
+mgu :: (KindOf tc k, Eq tc) => HMType tc k -> HMType tc k
+             -> Either (MguError tc k) (Subst tc k)
+mgu (TVar x) t = bindVar x t
+mgu t (TVar x) = bindVar x t
 mgu (TApp s1 s2) (TApp t1 t2) =
-  do su1 <- mgu s1 t1
-     su2 <- mgu (apS su1 s2) (apS su1 t2)
-     return (compS su2 su1)
-mgu (TCon c) (TCon d) | c == d  = return emptyS
-mgu t1 t2 = typeMismatch t1 t2
+  case mgu s1 t1 of
+    Left err -> Left err
+    Right su1 ->
+      case mgu (apS su1 s2) (apS su1 t2) of
+        Left err  -> Left err
+        Right su2 -> Right (compS su2 su1) 
+mgu (TCon c) (TCon d) | c == d  = Right emptyS
+mgu t1 t2 = Left (TypeMismatch t1 t2)
+
+bindVar :: KindOf tc k => TVar k -> HMType tc k
+        -> Either (MguError tc k) (Subst tc k)
+bindVar x t = case singleS x t of
+                Left err -> Left (TVarBindError err x t)
+                Right s  -> Right s
+              
+
+-- | Check if a type pattern (1st argument) matches a type (2nd argument).
+-- Unification variables in the pattern are treated as constants:
+--   * they are equal only to themselves,
+--   * they cannot be bound, and
+--   * they are considered to be distinct from the variables in the pattern.
+-- Examples:
+-- "x"      "List y"            ---> Just { x = List y }
+-- "List x" "y"                 ---> Nothing
+-- "x"      "List x"            ---> Just { x = List x }
+-- "(x,x)"  "(List a, List a)"  ---> Just { x = List a }
+-- "(x,x)"  "(List a, List b)"  ---> Nothing
+match :: (KindOf tc k, Eq tc)
+      => HMType tc k -> HMType tc k
+      -> Maybe (Subst tc k)
+match (TVar x) t
+  | kindOf x /= kindOf t  = Nothing
+match (TVar (TV x _)) t   = Just (Su (M.singleton x t))
+match (TApp s1 s2) (TApp t1 t2) =
+  do su1 <- match s1 t1
+     su2 <- match s2 t2
+     mergeS su2 su1
+match (TCon c) (TCon d) | c == d  = return emptyS
+match _ _                         = Nothing
+
+
 
 
 compS :: Subst tc k -> Subst tc k -> Subst tc k
 compS s2@(Su su2) (Su su1) = Su (M.union (apS s2 `fmap` su1) su2)
 
+mergeS :: Eq tc => Subst tc k -> Subst tc k -> Maybe (Subst tc k)
+mergeS (Su su1) (Su su2)
+  | M.fold (&&) True (M.intersectionWith (==) su1 su2) =
+          Just (Su (M.union su1 su2))
+  | otherwise = Nothing
+
 emptyS :: Subst tc k
 emptyS = Su M.empty
 
-singleS :: UnificationMonad m k tc => TVar k -> HMType tc k -> m (Subst tc k)
+singleS :: KindOf tc k => TVar k -> HMType tc k
+        -> Either TVarBindError (Subst tc k)
 singleS x (TVar y)
-  | x == y              = return emptyS
+  | x == y              = Right emptyS
 
 singleS (TV _ k) t
-  | k1 /= k2            = kindMismatch k1 k2
+  | k1 /= k2            = Left KindMismatch
     where k1 = kindOf k
           k2 = kindOf t
 
 singleS v t
-  | v `S.member` freeTVars t = recursiveType v t
+  | v `S.member` freeTVars t = Left RecursiveType
 
-singleS (TV x _) t = return (Su (M.singleton x t))
+singleS (TV x _) t = Right (Su (M.singleton x t))
 
 --------------------------------------------------------------------------------
 
