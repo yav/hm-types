@@ -280,11 +280,15 @@ data MguError tc k  = TVarBindError TVarBindError (TVar k) (HMType tc k)
                     | TypeMismatch (HMType tc k) (HMType tc k)
 
 -- | A substitution associating type variables with terms.
-newtype Subst tc k      = Su (M.IntMap (HMType tc k))
+newtype Subst tc k  = Su (M.IntMap (HMType tc k, String))
+
+instance (Pretty k, Pretty (TConApp tc k)) => Pretty (Subst tc k) where
+  pPrintPrec l _ (Su su) = braces $ fsep $ map pp $ M.toList su
+    where pp (_,(t,n))  = text n <+> char '=' <+> pPrintPrec l 0 t
 
 -- | Find the binding for a unfication variable, if any.
 lookupS :: TVar k -> Subst tc k -> Maybe (HMType tc k)
-lookupS (TV x _) (Su m) = M.lookup x m
+lookupS (TV x _) (Su m) = fst `fmap` M.lookup x m
 
 -- | Compute the most general unifier of two terms, if possible.
 mgu :: (KindOf tc k, Eq tc) => HMType tc k -> HMType tc k
@@ -333,7 +337,7 @@ match :: (KindOf tc k, Eq tc)
       -> Maybe (Subst tc k)
 match (TVar x) t
   | kindOf x /= kindOf t  = Nothing
-match (TVar (TV x _)) t   = Just (Su (M.singleton x t))
+match (TVar (TV x (TParam name _))) t   = Just (Su (M.singleton x (t,name)))
 match (TApp s1 s2) (TApp t1 t2) =
   do su1 <- match s1 t1
      su2 <- match s2 t2
@@ -345,11 +349,12 @@ match _ _                         = Nothing
 
 
 compS :: Subst tc k -> Subst tc k -> Subst tc k
-compS s2@(Su su2) (Su su1) = Su (M.union (apS s2 `fmap` su1) su2)
+compS s2@(Su su2) (Su su1) = Su (M.union (apS2 `M.map` su1) su2)
+  where apS2 (t,n) = (apS s2 t, n)
 
 mergeS :: Eq tc => Subst tc k -> Subst tc k -> Maybe (Subst tc k)
 mergeS (Su su1) (Su su2)
-  | M.fold (&&) True (M.intersectionWith (==) su1 su2) =
+  | M.fold (&&) True (M.intersectionWith (\a b -> fst a == fst b) su1 su2) =
           Just (Su (M.union su1 su2))
   | otherwise = Nothing
 
@@ -362,7 +367,7 @@ singleS :: KindOf tc k
 singleS x (TVar y) | x == y                   = Right emptyS
 singleS v t        | kindOf v /= kindOf t     = Left KindMismatch
 singleS v t        | v `S.member` freeTVars t = Left RecursiveType
-singleS (TV x _) t                            = Right (Su (M.singleton x t))
+singleS (TV x (TParam name _)) t        = Right (Su (M.singleton x (t,name)))
 
 --------------------------------------------------------------------------------
 
