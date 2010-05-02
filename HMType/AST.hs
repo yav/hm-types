@@ -293,16 +293,25 @@ bindVar x t = case singleS x t of
               
 
 -- | Check if a type pattern (1st argument) matches a type (2nd argument).
--- Unification variables in the pattern are treated as constants:
+-- Unification variables in the type are treated as constants:
+-- 
 --   * they are equal only to themselves,
+--
 --   * they cannot be bound, and
+--
 --   * they are considered to be distinct from the variables in the pattern.
+--
 -- Examples:
--- "x"      "List y"            ---> Just { x = List y }
--- "List x" "y"                 ---> Nothing
--- "x"      "List x"            ---> Just { x = List x }
--- "(x,x)"  "(List a, List a)"  ---> Just { x = List a }
--- "(x,x)"  "(List a, List b)"  ---> Nothing
+--
+--  * @match /x/        [a]         == Just { /x/ = [a] }@
+--
+--  * @match [/x/]      a           == Nothing@
+--
+--  * @match /x/        [x]         == Just { /x/ = [x] }@
+--
+--  * @match (/x/,/x/)  ([a], [a])  == Just { /x/ = [a] }@
+--
+--  * @match (/x/,/x/)  ([a], [b])  == Nothing@
 match :: (KindOf tc k, Eq tc)
       => HMType tc k -> HMType tc k
       -> Maybe (Subst tc k)
