@@ -213,7 +213,23 @@ instance (HasKinds tc k, HasKinds t k) => HasKinds (Qual tc k t) k where
                       Forall (mapKinds f as) (mapKinds f ps) (mapKinds f t)
 --------------------------------------------------------------------------------
 
+class HasTCons t tcon | t -> tcon where
+  mapTCons :: (tcon -> tcon) -> t -> t
 
+instance HasTCons (HMType tcon kind) tcon where
+  mapTCons f ty =
+    case ty of
+      TApp t1 t2  -> TApp (mapTCons f t1) (mapTCons f t2)
+      TCon tcon   -> TCon (f tcon)
+      TVar _      -> ty
+      TGen _      -> ty
+
+instance HasTCons t tcon => HasTCons [t] tcon where
+  mapTCons f xs  = map (mapTCons f) xs
+
+instance HasTCons t tcon => HasTCons (Qual tcon kind t) tcon where
+  mapTCons f (Forall as ps t) =
+                      Forall as (mapTCons f ps) (mapTCons f t)
 
 --------------------------------------------------------------------------------
 
