@@ -331,20 +331,13 @@ mergeS (Su su1) (Su su2)
 emptyS :: Subst tc k
 emptyS = Su M.empty
 
-singleS :: KindOf tc k => TVar k -> HMType tc k
+singleS :: KindOf tc k
+        => TVar k -> HMType tc k
         -> Either TVarBindError (Subst tc k)
-singleS x (TVar y)
-  | x == y              = Right emptyS
-
-singleS (TV _ k) t
-  | k1 /= k2            = Left KindMismatch
-    where k1 = kindOf k
-          k2 = kindOf t
-
-singleS v t
-  | v `S.member` freeTVars t = Left RecursiveType
-
-singleS (TV x _) t = Right (Su (M.singleton x t))
+singleS x (TVar y) | x == y                   = Right emptyS
+singleS v t        | kindOf v /= kindOf t     = Left KindMismatch
+singleS v t        | v `S.member` freeTVars t = Left RecursiveType
+singleS (TV x _) t                            = Right (Su (M.singleton x t))
 
 --------------------------------------------------------------------------------
 
