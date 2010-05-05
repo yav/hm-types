@@ -11,6 +11,7 @@ module HMType.AST
   , TVar(..)
   , Qual(..)
   , Schema
+  , NameOf(..)
 
   -- * Kinds
   , IsKind(..)
@@ -62,6 +63,15 @@ data Qual tc k a    = Forall [TParam k] [Pred tc k] a
 -- | A schema is qualified type.
 type Schema tc k    = Qual tc k (HMType tc k)
 
+
+class NameOf t where
+  nameOf :: t -> String
+
+instance NameOf (TParam k) where
+  nameOf (TParam s _) = s
+
+instance NameOf (TVar k) where
+  nameOf (TV _ p) = nameOf p
 
 instance Eq (TVar k) where
   TV x _ == TV y _ = x == y
