@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 module HMType.Example.Haskell where
 
 import HMType.AST
@@ -28,12 +27,12 @@ instance IsKind Kind where
   isKFun (K (TCon KFun `TApp` a `TApp` b))  = Just (K a, K b)
   isKFun _                                  = Nothing
 
-instance Pretty (TConApp KCon Sort) where
+instance PrettyTCon KCon Sort where
 
-  pPrintPrec l n (TConApp KFun [t1,t2]) = prettyParen (n > 5) $
+  pPrintTCon l n KFun [t1,t2] = prettyParen (n > 5) $
     pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
 
-  pPrintPrec l n (TConApp t ts) = prettyTApp l n (text short) ts 
+  pPrintTCon l n t ts = prettyTApp l n (text short) ts 
     where short = case t of
                     KFun  -> "(->)"
                     KStar -> "*"
@@ -85,18 +84,18 @@ instance HasKinds Type Kind where
 
 
 
-instance Pretty (TConApp TCon Kind) where
+instance PrettyTCon TCon Kind where
 
-  pPrintPrec l n (TConApp TFun [t1,t2]) = prettyParen (n > 5) $
+  pPrintTCon l n TFun [t1,t2] = prettyParen (n > 5) $
     pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
 
-  pPrintPrec l _ (TConApp TList [t1]) =
+  pPrintTCon l _ TList [t1] =
     brackets (pPrintPrec l 0 t1)
 
-  pPrintPrec l _ (TConApp (TTuple n) ts) | length ts == n =
+  pPrintTCon l _ (TTuple n) ts | length ts == n =
     parens $ fsep $ punctuate comma $ map (pPrintPrec l 0) ts
 
-  pPrintPrec l n (TConApp t ts) = prettyTApp l n (text short) ts 
+  pPrintTCon l n t ts = prettyTApp l n (text short) ts 
     where short = case t of
                     TFun      -> "(->)"
                     TList     -> "[]"

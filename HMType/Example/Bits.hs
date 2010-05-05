@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 module HMType.Example.Bits where
 
 import HMType.AST
@@ -32,12 +31,12 @@ instance IsKind Kind where
   isKFun (K (TCon KFun `TApp` a `TApp` b))  = Just (K a, K b)
   isKFun _                                  = Nothing
 
-instance Pretty (TConApp KCon Sort) where
+instance PrettyTCon KCon Sort where
 
-  pPrintPrec l n (TConApp KFun [t1,t2]) = prettyParen (n > 5) $
+  pPrintTCon l n KFun [t1,t2] = prettyParen (n > 5) $
     pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
 
-  pPrintPrec l n (TConApp t ts) = prettyTApp l n (text short) ts 
+  pPrintTCon l n t ts = prettyTApp l n (text short) ts 
     where short = case t of
                     KFun  -> "(->)"
                     KStar -> "*"
@@ -110,21 +109,21 @@ instance HasKinds Type Kind where
 
 
 
-instance Pretty (TConApp TCon Kind) where
+instance PrettyTCon TCon Kind where
 
-  pPrintPrec l n (TConApp TFun [t1,t2]) = prettyParen (n > 5)
+  pPrintTCon l n TFun [t1,t2] = prettyParen (n > 5)
     $ pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
 
-  pPrintPrec l n (TConApp TSeq [t1,t2]) = prettyParen (n > 6)
+  pPrintTCon l n TSeq [t1,t2] = prettyParen (n > 6)
     $ brackets (pPrintPrec l 0 t1) <> pPrintPrec l 6 t2
 
-  pPrintPrec _ _ (TConApp TBit []) = text "Bit"
+  pPrintTCon _ _ TBit [] = text "Bit"
 
-  pPrintPrec l n (TConApp (TNum x) []) = pPrintPrec l n x
+  pPrintTCon l n (TNum x) [] = pPrintPrec l n x
 
   -- XXX: rules to print arithmetic nicely
 
-  pPrintPrec l n (TConApp t ts) = prettyTApp l n (text short) ts
+  pPrintTCon l n t ts = prettyTApp l n (text short) ts
     where short = case t of
                     TFun   -> "(->)"
                     TSeq   -> "[]"

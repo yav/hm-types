@@ -23,7 +23,7 @@ module HMType.AST
   , HasGVars(..)
 
   -- * Pretty printing
-  , TConApp(..)
+  , PrettyTCon(..)
   , prettyTApp
   ) where
 
@@ -224,9 +224,8 @@ instance HasTCons t tcon => HasTCons (Qual tcon kind t) tcon where
 
 --------------------------------------------------------------------------------
 
--- | An application of a constructor to some types.
--- Used for pretty-printing.
-data TConApp tc k = TConApp tc [ HMType tc k ]
+class Pretty kind => PrettyTCon tcon kind | tcon -> kind where
+  pPrintTCon :: PrettyLevel -> Rational -> tcon -> [HMType tcon kind] -> Doc
 
 instance Pretty k => Pretty (TParam k) where
   pPrintPrec (PrettyLevel 0) _ (TParam s _) = text s
@@ -236,12 +235,12 @@ instance Pretty k => Pretty (TParam k) where
 instance Pretty k => Pretty (TVar k) where
   pPrintPrec l n (TV _ p) = pPrintPrec l n p
 
-instance (Pretty k, Pretty (TConApp tc k)) => Pretty (HMType tc k) where
+instance PrettyTCon tcon kind => Pretty (HMType tcon kind) where
   pPrintPrec l n ty =
     case t of
       TVar tvar -> prettyTApp l n (char '?' <> pPrintPrec l 0 tvar) ts
       TGen tvar -> prettyTApp l n (pPrintPrec l 0 tvar) ts
-      TCon tcon -> pPrintPrec l n (TConApp tcon ts)
+      TCon tcon -> pPrintTCon l n tcon ts
       TApp _ _  -> error "BUG: 'splitTApp' returned an applications"
 
     where
@@ -251,8 +250,7 @@ prettyTApp :: Pretty a => PrettyLevel -> Rational -> Doc -> [a] -> Doc
 prettyTApp l n f ps = prettyParen (not (null ps) && n >= 9)
                         (f <+> fsep (map (pPrintPrec l 9) ps))
 
-instance (Pretty (TConApp tc k), Pretty k, Pretty t) 
-                                          => Pretty (Qual tc k t) where
+instance (PrettyTCon tcon kind, Pretty t) => Pretty (Qual tcon kind t) where
   pPrintPrec l n (Forall _ [] t)  = pPrintPrec l n t
   pPrintPrec l n (Forall _ ps t)  = prettyParen (n /= 0)
                                      (preds <+> text "=>" <+> pPrintPrec l 0 t)

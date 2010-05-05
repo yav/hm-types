@@ -1,9 +1,5 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}   -- pfft
 module HMType.Subst
-  (
-  -- * Substitutions
-    Subst
+  ( Subst
   , apS
   , lookupS
   , compS
@@ -35,7 +31,7 @@ data MguError tc k  = TVarBindError TVarBindError (TVar k) (HMType tc k)
 -- | A substitution associating type variables with terms.
 newtype Subst tc k  = Su (M.IntMap (HMType tc k, String))
 
-instance (Pretty k, Pretty (TConApp tc k)) => Pretty (Subst tc k) where
+instance PrettyTCon tc k => Pretty (Subst tc k) where
   pPrintPrec l _ (Su su) = braces $ fsep $ map pp $ M.toList su
     where pp (_,(t,n))  = text n <+> char '=' <+> pPrintPrec l 0 t
 
