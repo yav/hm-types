@@ -1,8 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}   -- pfft
+{-# LANGUAGE UndecidableInstances #-}
 module HMType.AST
   ( -- * Types
     HMType(..)
