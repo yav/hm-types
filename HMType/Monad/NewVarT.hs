@@ -7,8 +7,9 @@ module HMType.Monad.NewVarT
 
 import MonadLib
 import HMType.AST
+import Control.Monad.Fix
 
-newtype NewVarT m a = I (StateT Int m a) deriving (Functor,Monad)
+newtype NewVarT m a = I (StateT Int m a) deriving (Functor,Monad,MonadFix)
 
 instance MonadT NewVarT where
   lift m = I (lift m)

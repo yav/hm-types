@@ -8,11 +8,12 @@ module HMType.Monad.UnifyT
 import MonadLib
 import HMType.AST
 import HMType.Subst
+import Control.Monad.Fix
 
 newtype UnifyT tc k m a = I ( ExceptionT (MguError tc k)
                             ( StateT (Subst tc k)
                               m) a)
-      deriving (Functor,Monad)
+      deriving (Functor,Monad,MonadFix)
 
 instance MonadT (UnifyT tc k) where
   lift m = I (lift (lift m))
