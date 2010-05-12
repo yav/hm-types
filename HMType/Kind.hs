@@ -29,6 +29,9 @@ instance Eq k => IsKind (Kind k) where
 instance PrettyTCon (KCon k) Sort => Pretty (Kind k) where
   pPrintPrec l n (K k) = pPrintPrec l n k
 
+instance KindOf (KCon k) Sort where
+  kindOf _ = Sort
+
 instance KindOf (Kind k) Sort where
   kindOf _ = Sort
 

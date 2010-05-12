@@ -19,7 +19,7 @@ newtype KindM tc kc a = KT ( StateT ( Maybe (VarMap tc kc)  -- uni vars
                                     )
                            ( NewVarT    -- kind vars
                            ( NewVarT    -- type vars
-                           ( UnifyT kc Sort Id))) a)
+                           ( UnifyT (KCon kc) Sort Id))) a)
                               deriving (Functor,Monad)
 
 newKind :: KindM tc kc (Kind kc)
@@ -31,12 +31,11 @@ newTVar :: TParam (Kind kc) -> KindM tc kc (Type tc kc)
 newTVar p = KT $ lift $ lift $ newUVar p
 
 
-unifyK :: (Eq kc, KindOf kc Sort)
-       => Kind kc -> Kind kc -> KindM tc kc ()
+unifyK :: (Eq kc) => Kind kc -> Kind kc -> KindM tc kc ()
 unifyK (K t1) (K t2)  = KT $ lift $ lift $ lift $ unify t1 t2
 
 
-checkType :: (IsKindCon kc, KindOf tc (Kind kc), KindOf kc Sort) 
+checkType :: (Eq kc, KindOf tc (Kind kc))
           => Type tc kc -> KindM tc kc (Type tc kc, Kind kc)
 checkType ty =
   case ty of
@@ -53,19 +52,23 @@ checkType ty =
                      t1 <- newTVar (TParam name k)
                      KT $ set (Just (M.insert name t1 m), g)
                      return (t1, k)
+
     TGen tvar   ->
       do (u,g) <- KT get
          case g of
            Nothing -> undefined -- error, generic vars not allowed
+
            Just m ->
              let name = nameOf tvar in
-             case M.lookup name g of
+             case M.lookup name m of
                Just t  -> return (t, kindOf t)    -- adjust, or lazy?
                Nothing -> undefined -- careful with nested binders
                    -- e.g., methods in a class
                    -- class C a where
                    --   f :: b -> a    -- here b is 0, a is 1
                    --   g :: a         -- here a is 0
+
+
       
     TCon tcon   -> return (ty, kindOf tcon) -- or make up a new kind?
     TApp t1 t2  ->
