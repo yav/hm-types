@@ -1,5 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 module HMType.Example.Haskell where
 
 import HMType.AST
@@ -8,32 +9,24 @@ import HMType.Kind
 import Text.PrettyPrint.HughesPJClass
 
 -- Kinds -----------------------------------------------------------------------
-data KCon         = KFun            -- The kind of type constructors.
-                  | KStar           -- The kind of ordinary value types.
-                  | KPred           -- The kind of predicates.
+data HKCon        = KStar           -- The kind of ordinary value types.
                     deriving Eq
 
-type HKind        = Kind KCon
+type HKind        = Kind HKCon
 
 kStar            :: HKind
 kStar             = kCon KStar
 
-kPred            :: HKind
-kPred             = kCon KPred
-
-instance IsKindCon KCon where
-  kFunCon = KFun
-
-instance PrettyTCon KCon Sort where
+instance PrettyTCon (KCon HKCon) Sort where
 
   pPrintTCon l n KFun [t1,t2] = prettyParen (n > 5) $
     pPrintPrec l 6 t1 <+> text "->" <+> pPrintPrec l 5 t2
 
   pPrintTCon l n t ts = prettyTApp l n (text short) ts 
     where short = case t of
-                    KFun  -> "(->)"
-                    KStar -> "*"
-                    KPred -> "prop"
+                    KFun       -> "(->)"
+                    KPred      -> "prop"
+                    KCon KStar -> "*"
 
 --------------------------------------------------------------------------------
 
