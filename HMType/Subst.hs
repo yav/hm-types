@@ -1,4 +1,4 @@
-module HMType.Subst {-
+module HMType.Subst
   ( Subst
   , apS
   , lookupS
@@ -11,12 +11,11 @@ module HMType.Subst {-
 
   , TVarBindError(..)
   , MguError(..)
-  ) -} where
+  ) where
 
 import HMType.AST
 import qualified Data.IntMap as M
 import qualified Data.Set as S
-import Text.PrettyPrint.HughesPJClass
 
 
 -- | What may go wrong when we try to bind a type variable to a type.
@@ -30,12 +29,6 @@ data MguError       = TVarBindError TVarBindError TRef Type
 
 -- | A substitution associating type variables with terms.
 newtype Subst       = Su (M.IntMap (Type, String))
-
-{-
-instance PrettyTCon tc k => Pretty (Subst tc k) where
-  pPrintPrec l _ (Su su) = braces $ fsep $ map pp $ M.toList su
-    where pp (_,(t,n))  = text n <+> char '=' <+> pPrintPrec l 0 t
--}
 
 -- | Find the binding for a unfication variable, if any.
 lookupS :: TRef -> Subst -> Maybe Type

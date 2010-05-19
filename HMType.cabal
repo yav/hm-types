@@ -10,14 +10,6 @@ Build-Depends:
 Build-type:     Simple
 Exposed-modules:
   HMType.AST
-  HMType.Sort
   HMType.Subst
-  HMType.Example.Haskell
-  HMType.Example.Bits
 GHC-options:    -O2 -Wall
-Extensions:
-  MultiParamTypeClasses
-  FlexibleInstances
-  FunctionalDependencies
-  UndecidableInstances
 
