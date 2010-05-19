@@ -30,7 +30,7 @@ data Type = TApp Type Type  -- ^ Type application
           | TCon TRef       -- ^ Type constructor
           | TVar TRef       -- ^ Unification variable
           | TGen TRef       -- ^ Generic variable
-            deriving Eq
+            deriving (Eq,Show)
 
 -- | Kinds, classifing types.
 type Kind = Type
@@ -41,7 +41,7 @@ type Pred = Type
 -- | Type \"reference\".
 -- This type is used for unifciation and generic variables,
 -- and also type constructors.
-data TRef = TR Int TParam
+data TRef = TR Int TParam deriving Show
 
 instance Eq TRef where
   TR x _ == TR y _ = x == y
@@ -54,6 +54,7 @@ instance Ord TRef where
 -- A sugegsted name for display purposes, together with the type (kind)
 -- of a parameter.
 data TParam       = TParam String Kind
+                    deriving Show
 
 
 -- | Split-off all type applications.
@@ -97,11 +98,7 @@ instance KindOf Type where
       TCon tcon   -> kindOf tcon
       TVar tvar   -> kindOf tvar
       TGen tvar   -> kindOf tvar
-      TApp t1 _   ->
-        case kindOf t1 of
-          TApp (TApp _fun _arg) res -> res
-          _ -> error "kindOf malformed type"
-
+      TApp t1 _   -> let TApp _ res = t1 in res
 
 --------------------------------------------------------------------------------
 
