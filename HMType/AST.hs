@@ -122,6 +122,7 @@ instance HasTVars t => HasTVars [t] where
   apTVars su xs = map (apTVars su) xs
   freeTVars xs  = S.unions (map freeTVars xs)
 
+-- NOTE: Does not avoid capture in substitution!
 instance HasTVars t => HasTVars (Qual t) where
   apTVars su (Forall as ps t) = Forall as (apTVars su ps) (apTVars su t)
   freeTVars (Forall _ ps t)   = S.union (freeTVars ps) (freeTVars t)
