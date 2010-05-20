@@ -7,7 +7,6 @@ module HMType.AST
   , TParam(..)
   , TRef (..)
   , Qual(..)
-  , Schema
   , NameOf(..)
 
   -- * Kinds
@@ -66,9 +65,6 @@ splitTApp t  = split t []
 
 -- | The type of qualified entities.
 data Qual a = Forall [TParam] [Pred] a
-
--- | A schema is qualified type.
-type Schema = Qual Type
 
 
 class NameOf t where
