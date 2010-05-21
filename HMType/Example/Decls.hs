@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module HMTypes.Example.Decls where
+module HMType.Example.Decls where
 
 import HMType.AST
 import HMType.Subst
@@ -68,7 +68,7 @@ inferDecl decl =
     DRec d ->
       do env1 <- monoEnv d
          (env2,ps) <- getPreds $ inExtEnv env1 $ inferDeclMono d
-         zipWithM_ unify (monoEnvTypes env1) (monoEnvTypes env2) 
+         zipWithM_ unify (monoEnvTypes env1) (monoEnvTypes env2)
          generalizeEnv ps env2
 
 monoEnv d = liftM Map.fromList
@@ -145,6 +145,9 @@ kFun k1 k2    = kcFun `TApp` k1 `TApp` k2
 
 tcFun         = TCon $ TR 0 $ TParam "->" $ kFun kStar $ kFun kStar kStar
 tFun t1 t2    = tcFun `TApp` t1 `TApp` t2
+--------------------------------------------------------------------------------
+
+
 
 type Env      = Map.Map Name (Qual Type)
 data R        = R Env
@@ -157,12 +160,39 @@ data E        = UndefinedVariable Name Type
               | UnificationError MguError
               | MultipleDefinitions (Set.Set Name)
 
+instance HasTVars E where
+  apTVars f err =
+    case err of
+      UndefinedVariable x t -> UndefinedVariable x (apTVars f t)
+      UnificationError e    -> UnificationError (apTVars f e)
+      MultipleDefinitions x -> MultipleDefinitions x
+
+  freeTVars err =
+    case err of
+      UndefinedVariable _ t -> freeTVars t
+      UnificationError e    -> freeTVars e
+      MultipleDefinitions x -> Set.empty
+
+
+
 newtype TI a  = TI (ReaderT R
                    (WriterT W
                    (WriterT (Seq.Seq E)
                    (StateT S
                      Id))) a)
                 deriving (Monad)
+
+
+runTI (TI m)  = (apS a, apS (seqToList errs), apS (seqToList ps))
+  where
+  apS x = apTVars (`lookupS` subst s) x
+  (((a,ps), errs), s)
+    = runId
+    $ runStateT S { subst = emptyS, names = 0 }
+    $ runWriterT
+    $ runWriterT
+    $ runReaderT (R Map.empty) m
+
 
 
 addErrs es = TI $ lift $ lift $ put $ Seq.fromList es
