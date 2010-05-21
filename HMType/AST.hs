@@ -122,9 +122,9 @@ instance HasTVars t => HasTVars [t] where
   apTVars su xs = map (apTVars su) xs
   freeTVars xs  = S.unions (map freeTVars xs)
 
--- NOTE: Does not avoid capture in substitution!
 instance HasTVars t => HasTVars (Qual t) where
-  apTVars su (Forall as ps t) = Forall as (apTVars su ps) (apTVars su t)
+  apTVars su (Forall as ps t) = Forall as (apTVars su1 ps) (apTVars su1 t)
+    where su1 x = avoidCapture as `fmap` su x
   freeTVars (Forall _ ps t)   = S.union (freeTVars ps) (freeTVars t)
 
 
@@ -136,6 +136,27 @@ instVar :: TParam -> [Type] -> Int -> Type
 instVar _ (t : _)  0 = t
 instVar p (_ : ts) n = instVar p ts (n-1)
 instVar p []       n = TGen (TR n p)
+
+
+avoidCapture :: [TParam] -> Type -> Type
+avoidCapture [] = id
+avoidCapture as = inc
+  where
+  bound = length as
+
+  rename (TParam n k) | n `elem` names  = TParam ('^' : n) k
+    where names = [ x | TParam x _ <- as ]
+  rename p                              = p
+
+  inc ty = case ty of
+             TGen (TR x p)  -> TGen (TR (x + bound) (rename p))
+             TVar _         -> ty
+             TCon _         -> ty
+             TApp t1 t2     -> TApp (inc t1) (inc t2)
+
+
+
+
 
 instance HasGVars Type where
   apGVars su ty =
@@ -150,21 +171,8 @@ instance HasGVars t => HasGVars [t] where
 
 instance HasGVars t => HasGVars (Qual t) where
   apGVars su (Forall as ps t) = Forall as (apGVars su1 ps) (apGVars su1 t)
-    where su1 = zipWith unchanged [0..] as ++ map inc su
+    where su1 = zipWith unchanged [0..] as ++ map (avoidCapture as) su
           unchanged n p = TGen (TR n p)
-
-          bound = length as
-
-          rename (TParam n k) | n `elem` names  = TParam ('^' : n) k
-            where names = [ x | TParam x _ <- as ]
-          rename p                              = p
-
-          inc ty = case ty of
-                     TGen (TR x p)  -> TGen (TR (x + bound) (rename p))
-                     TVar _         -> ty
-                     TCon _         -> ty
-                     TApp t1 t2     -> TApp (inc t1) (inc t2)
-
 
 
 --------------------------------------------------------------------------------
