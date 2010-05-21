@@ -9,6 +9,7 @@ import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 import Control.Monad.Fix
 import Data.List
+import Data.Maybe
 
 data Name       = Name String
                   deriving (Show,Eq,Ord)
@@ -71,14 +72,14 @@ inferDecl decl =
          zipWithM_ unify (monoEnvTypes env1) (monoEnvTypes env2)
          generalizeEnv ps env2
 
-monoEnv d = liftM Map.fromList
+monoEnv d = liftM (E . Map.fromList)
           $ forM (Set.toList (defs d))
           $ \x -> do t <- newTVar kStar
                      return (x, mono t)
 
 fromMonoSchema (Forall _ _ t) = t
 
-monoEnvTypes env = map (fromMonoSchema . snd) $ Map.toList env
+monoEnvTypes (E env) = map (fromMonoSchema . snd) $ Map.toList env
 
 
 defs decl = case decl of
@@ -87,15 +88,15 @@ defs decl = case decl of
               DRec d      -> defs d
               DDef x _    -> Set.singleton x
 
-generalizeEnv ps env =
+generalizeEnv ps (E env) =
   do let (xs,ss) = unzip $ Map.toList env
      (as,ps1,ts1) <- generalize ps $ map fromMonoSchema ss
      let toS x t = (x, Forall as ps1 t)
-     return $ Map.fromList $ zipWith toS xs ts1
+     return $ E $ Map.fromList $ zipWith toS xs ts1
 
 
 generalize ps t =
-  do R env <- TI $ ask
+  do R (E env) <- TI $ ask
      let envVars    = freeTVars $ Map.elems env
          genVars    = freeTVars t `Set.difference` envVars
          isExtern p = Set.null (freeTVars p `Set.intersection` genVars)
@@ -139,17 +140,20 @@ inferExpr expr =
 --------------------------------------------------------------------------------
 mono          = Forall [] []
 
-kStar         = TCon $ TR 0 $ TParam "*"  $ error "sort"
-kcFun         = TCon $ TR 1 $ TParam "->" $ error "sort"
+kStar         = TCon $ TR 0 $ TParam "*"  $ Nothing
+kcFun         = TCon $ TR 1 $ TParam "->" $ Nothing
 kFun k1 k2    = kcFun `TApp` k1 `TApp` k2
 
-tcFun         = TCon $ TR 0 $ TParam "->" $ kFun kStar $ kFun kStar kStar
+tcFun         = TCon $ TR 0 $ TParam "->" $ Just $ kFun kStar $ kFun kStar kStar
 tFun t1 t2    = tcFun `TApp` t1 `TApp` t2
 --------------------------------------------------------------------------------
 
 
 
-type Env      = Map.Map Name (Qual Type)
+newtype Env   = E (Map.Map Name (Qual Type))
+                  deriving Show
+
+
 data R        = R Env
 type W        = Seq.Seq Pred
 data S        = S { subst         :: Subst
@@ -159,6 +163,7 @@ data S        = S { subst         :: Subst
 data E        = UndefinedVariable Name Type
               | UnificationError MguError
               | MultipleDefinitions (Set.Set Name)
+                deriving Show
 
 instance HasTVars E where
   apTVars f err =
@@ -191,7 +196,7 @@ runTI (TI m)  = (apS a, apS (seqToList errs), apS (seqToList ps))
     $ runStateT S { subst = emptyS, names = 0 }
     $ runWriterT
     $ runWriterT
-    $ runReaderT (R Map.empty) m
+    $ runReaderT (R emptyEnv) m
 
 
 
@@ -201,27 +206,28 @@ addPreds ps = TI $ put $ Seq.fromList ps
 
 getPreds (TI m) = TI $ collect m
 
+-- By this point, all as should have kinds.
 instantiate (Forall as ps t) =
-  do ts <- mapM (newTVar . kindOf) as
+  do ts <- mapM newTVar $ mapMaybe kindOf as
      addPreds $ map (apGVars ts) ps
      return $ apGVars ts t
 
 
-inExtEnv env (TI m) = TI $
-  do R envOld <- ask
-     local (R (Map.union env envOld)) m
+inExtEnv (E env) (TI m) = TI $
+  do R (E envOld) <- ask
+     local (R $ E (Map.union env envOld)) m
 
-mergeEnv env1 env2 =
+mergeEnv (E env1) (E env2) =
   do let redef = Map.keysSet (Map.intersection env1 env2)
      unless (Set.null redef) $ addErrs [ MultipleDefinitions redef ]
      -- In case of error, we use the first definition.
-     return (Map.union env1 env2)
+     return $ E $ Map.union env1 env2
 
 newTVar k   = TI $
   do s <- get
      let n = names s
      set s { names = n + 1 }
-     return $ TVar $ TR n $ TParam ('?' : show n) k
+     return $ TVar $ TR n $ TParam ('?' : show n) $ Just k
 
 unify t1 t2 =
   do s <- TI $ get
@@ -232,11 +238,17 @@ unify t1 t2 =
      TI $ set s { subst = compS su2 su1 }
      addErrs $ map UnificationError errs
 
-singleEnv x s = Map.singleton x s
+lkpEnv x (E m)  = Map.lookup x m
+emptyEnv        = E Map.empty
+singleEnv x s   = E $ Map.singleton x s
+
+instance HasTVars Env where
+  apTVars f (E m) = E $ Map.map (apTVars f) m
+  freeTVars (E m) = Set.unions $ map freeTVars $ Map.elems m
 
 lookupVar x =
   do R env <- TI $ ask
-     case Map.lookup x env of
+     case lkpEnv x env of
        Just s   -> return s
        -- In case of error, we assume some monomorphic type.
        -- Note that this results in a new error for each separate

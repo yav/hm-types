@@ -24,7 +24,7 @@ data MguErrorType   = KindMismatch | RecursiveType | ShapeMismatch
 
 -- | What may go wrong while computing the most general unifier of two types.
 data MguError       = MguError MguErrorType Type Type
-                      deriving Eq
+                      deriving (Eq,Show)
 
 instance HasTVars MguError where
   apTVars f (MguError e t1 t2) = MguError e (apTVars f t1) (apTVars f t2)

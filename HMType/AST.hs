@@ -32,7 +32,7 @@ data Type = TApp Type Type  -- ^ Type application
             deriving (Eq,Show)
 
 -- | Kinds, classifing types.
-type Kind = Type
+type Kind = Maybe Type
 
 -- | Predicates, restricting polymorphism.
 type Pred = Type
@@ -65,6 +65,7 @@ splitTApp t  = split t []
 
 -- | The type of qualified entities.
 data Qual a = Forall [TParam] [Pred] a
+                deriving Show
 
 
 class NameOf t where
@@ -94,7 +95,8 @@ instance KindOf Type where
       TCon tcon   -> kindOf tcon
       TVar tvar   -> kindOf tvar
       TGen tvar   -> kindOf tvar
-      TApp t1 _   -> let TApp _ res = t1 in res
+      TApp t1 _   -> do TApp _ res <- kindOf t1
+                        return res
 
 --------------------------------------------------------------------------------
 
