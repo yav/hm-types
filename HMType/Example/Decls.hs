@@ -95,7 +95,7 @@ generalizeEnv ps env =
 
 
 generalize ps t =
-  do R env _ <- TI $ ask
+  do R env <- TI $ ask
      let envVars    = freeTVars $ Map.elems env
          genVars    = freeTVars t `Set.difference` envVars
          isExtern p = Set.null (freeTVars p `Set.intersection` genVars)
@@ -111,7 +111,6 @@ generalize ps t =
      addPreds externalPreds
      return ([ a | TR _ a <- as ], apS localPreds, apS t)
 
-seqToList = Seq.foldrWithIndex (const (:)) []
 
 
 inferExpr expr =
@@ -148,7 +147,7 @@ tcFun         = TCon $ TR 0 $ TParam "->" $ kFun kStar $ kFun kStar kStar
 tFun t1 t2    = tcFun `TApp` t1 `TApp` t2
 
 type Env      = Map.Map Name (Qual Type)
-data R        = R Env Bool    -- Bool: are we in Rec?
+data R        = R Env
 type W        = Seq.Seq Pred
 data S        = S { subst         :: Subst
                   , names         :: Int
@@ -168,14 +167,6 @@ newtype TI a  = TI (ReaderT R
 
 addErrs es = TI $ lift $ lift $ put $ Seq.fromList es
 
-isInRec = TI $
-  do R _ yes <- ask
-     return yes
-
-inRec yes (TI m) = TI $
-  do R env _ <- ask
-     local (R env yes) m
-
 addPreds ps = TI $ put $ Seq.fromList ps
 
 getPreds (TI m) = TI $ collect m
@@ -187,8 +178,8 @@ instantiate (Forall as ps t) =
 
 
 inExtEnv env (TI m) = TI $
-  do R envOld yes <- ask
-     local (R (Map.union env envOld) yes) m
+  do R envOld <- ask
+     local (R (Map.union env envOld)) m
 
 mergeEnv env1 env2 =
   do let redef = Map.keysSet (Map.intersection env1 env2)
@@ -214,7 +205,7 @@ unify t1 t2 =
 singleEnv x s = Map.singleton x s
 
 lookupVar x =
-  do R env _ <- TI $ ask
+  do R env <- TI $ ask
      case Map.lookup x env of
        Just s   -> return s
        -- In case of error, we assume some monomorphic type.
@@ -227,4 +218,5 @@ lookupVar x =
            return $ mono t
 
 
+seqToList = Seq.foldrWithIndex (const (:)) []
 
