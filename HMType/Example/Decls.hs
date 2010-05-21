@@ -25,12 +25,34 @@ data Expr       = EApp Expr Expr
                 | ELet Decl Expr
                   deriving Show
 
+inferDeclMono decl =
+  case decl of
+
+    DLet d1 d2 ->
+      do env  <- inferDecl d1
+         inExtEnv env $ inferDeclMono d2
+
+    DAnd d1 d2 ->
+      do env1 <- inferDeclMono d1
+         env2 <- inferDeclMono d2
+         mergeEnv env1 env2
+
+    DDef x e ->
+      do t <- inferExpr e
+         return $ singleEnv x $ mono t
+
+    DRec d ->
+      do env1 <- monoEnv d
+         env2 <- inExtEnv env1 $ inferDeclMono d
+         zipWithM_ unify (monoEnvTypes env1) (monoEnvTypes env2)
+         return env2
+
 
 inferDecl decl =
   case decl of
 
     DLet d1 d2 ->
-      do env  <- inRec False $ inferDecl d1
+      do env  <- inferDecl d1
          inExtEnv env (inferDecl d2)
 
     DAnd d1 d2 ->
@@ -39,25 +61,57 @@ inferDecl decl =
          mergeEnv env1 env2
 
     DDef x e ->
-      do t   <- inferExpr e
-         yes <- isInRec
-         s <- if yes then return (mono t) else generalize t
-         return (singleEnv x s)
+      do (t,ps) <- getPreds $ inferExpr e
+         (as,ps1,t1) <- generalize ps t
+         return $ singleEnv x $ Forall as ps1 t1
 
     DRec d ->
-      do xs <- defs d
-         let monoType x = do t <- newTVar kStar
-                             return (x, mono t)
-         ts <- mapM monoType xs
-         let env = Map.fromList ts
-         env1 <- inExtEnv env $ inRec True $ inferDecl d
-         env2 <- sameTypes env env1
-         yes <- isInRec
-         if yes then return env2 else generalizeEnv env2
+      do env1 <- monoEnv d
+         (env2,ps) <- getPreds $ inExtEnv env1 $ inferDeclMono d
+         zipWithM_ unify (monoEnvTypes env1) (monoEnvTypes env2) 
+         generalizeEnv ps env2
 
-defs = undefined
-sameTypes = undefined
-generalizeEnv = undefined
+monoEnv d = liftM Map.fromList
+          $ forM (Set.toList (defs d))
+          $ \x -> do t <- newTVar kStar
+                     return (x, mono t)
+
+fromMonoSchema (Forall _ _ t) = t
+
+monoEnvTypes env = map (fromMonoSchema . snd) $ Map.toList env
+
+
+defs decl = case decl of
+              DAnd d1 d2  -> Set.union (defs d1) (defs d2)
+              DLet _ d    -> defs d
+              DRec d      -> defs d
+              DDef x _    -> Set.singleton x
+
+generalizeEnv ps env =
+  do let (xs,ss) = unzip $ Map.toList env
+     (as,ps1,ts1) <- generalize ps $ map fromMonoSchema ss
+     let toS x t = (x, Forall as ps1 t)
+     return $ Map.fromList $ zipWith toS xs ts1
+
+
+generalize ps t =
+  do R env _ <- TI $ ask
+     let envVars    = freeTVars $ Map.elems env
+         genVars    = freeTVars t `Set.difference` envVars
+         isExtern p = Set.null (freeTVars p `Set.intersection` genVars)
+         (externalPreds, localPreds) = partition isExtern $ seqToList ps
+
+         as   = Set.toList genVars
+
+         -- signature needed due to the monomorhism restriction
+         apS :: HasTVars t => t -> t
+         apS  = apTVars $ \x@(TR _ p) -> do n <- elemIndex x as
+                                            return $ TGen $ TR n p
+
+     addPreds externalPreds
+     return ([ a | TR _ a <- as ], apS localPreds, apS t)
+
+seqToList = Seq.foldrWithIndex (const (:)) []
 
 
 inferExpr expr =
@@ -96,38 +150,23 @@ tFun t1 t2    = tcFun `TApp` t1 `TApp` t2
 type Env      = Map.Map Name (Qual Type)
 data R        = R Env Bool    -- Bool: are we in Rec?
 type W        = Seq.Seq Pred
-data S        = S Subst Int
-data E        = UndefinedVariable Name
+data S        = S { subst         :: Subst
+                  , names         :: Int
+                  }
+
+data E        = UndefinedVariable Name Type
               | UnificationError MguError
               | MultipleDefinitions (Set.Set Name)
 
 newtype TI a  = TI (ReaderT R
                    (WriterT W
+                   (WriterT (Seq.Seq E)
                    (StateT S
-                   (ExceptionT E
                      Id))) a)
                 deriving (Monad)
 
 
-generalize = undefined
-
-{-
--- XXX: Using the same predicates everywhere is only OK for the
--- recursive case.
-generalize (TI m) =
-  do (env,ps) <- TI $ collect m
-     envCur   <- TI ask
-     let fvs = Set.unions $ map freeTVars $ Map.elems envCur
-         isGeneral p = Set.null $ Set.intersection fvs $ freeTVars p
-         (ps1,ps2) = Seq.partition isGeneral ps
-         ps1' = undefined ps1 --Seq.toList ps1
-         genT t = let as = Set.fromList $ Set.difference (freeTVars t) fvs
-                      su x@(TR _ p)  = do n <- elemIndex x as
-                                          return $ TGen $ TR n p
-                  in Forall as (apTVars su ps1') (apTVars su t)
-     undefined -- addPreds ps2
-     return $ Map.map genT env
--}
+addErrs es = TI $ lift $ lift $ put $ Seq.fromList es
 
 isInRec = TI $
   do R _ yes <- ask
@@ -139,9 +178,11 @@ inRec yes (TI m) = TI $
 
 addPreds ps = TI $ put $ Seq.fromList ps
 
+getPreds (TI m) = TI $ collect m
+
 instantiate (Forall as ps t) =
   do ts <- mapM (newTVar . kindOf) as
-     addPreds $ map (apGVars ts) ps 
+     addPreds $ map (apGVars ts) ps
      return $ apGVars ts t
 
 
@@ -149,32 +190,41 @@ inExtEnv env (TI m) = TI $
   do R envOld yes <- ask
      local (R (Map.union env envOld) yes) m
 
-mergeEnv env1 env2 = TI $
+mergeEnv env1 env2 =
   do let redef = Map.keysSet (Map.intersection env1 env2)
-     if Set.null redef
-       then return (Map.union env1 env2)
-       else raise $ MultipleDefinitions redef
-    
+     unless (Set.null redef) $ addErrs [ MultipleDefinitions redef ]
+     -- In case of error, we use the first definition.
+     return (Map.union env1 env2)
 
 newTVar k   = TI $
-  do S su n <- get
-     set $ S su (n + 1)
+  do s <- get
+     let n = names s
+     set s { names = n + 1 }
      return $ TVar $ TR n $ TParam ('?' : show n) k
 
-unify t1 t2 = TI $
-  do S su n <- get
-     let subst = apTVars (`lookupS` su)
-     case mgu (subst t1) (subst t2) of
-       Left err  -> raise $ UnificationError err
-       Right su1 -> set $ S (compS su1 su) n
+unify t1 t2 =
+  do s <- TI $ get
+     let su1        = subst s
+         substF     = apTVars (`lookupS` su1)
+         (su2,errs) = mgu (substF t1) (substF t2)
+     -- In case of error, we just use the partially computed subsitution.
+     TI $ set s { subst = compS su2 su1 }
+     addErrs $ map UnificationError errs
 
 singleEnv x s = Map.singleton x s
 
-lookupVar x = TI $
-  do R env _ <- ask
+lookupVar x =
+  do R env _ <- TI $ ask
      case Map.lookup x env of
        Just s   -> return s
-       Nothing  -> raise $ UndefinedVariable x
+       -- In case of error, we assume some monomorphic type.
+       -- Note that this results in a new error for each separate
+       -- use of an undefined variable.  Perhaps, it is better to
+       -- report only the first one?
+       Nothing  ->
+        do t <- newTVar kStar
+           addErrs [ UndefinedVariable x t ]
+           return $ mono t
 
 
 
