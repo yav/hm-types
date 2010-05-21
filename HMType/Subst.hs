@@ -9,7 +9,7 @@ module HMType.Subst
   , mgu
   , match
 
-  , TVarBindError(..)
+  , MguErrorType(..)
   , MguError(..)
   ) where
 
@@ -19,13 +19,16 @@ import qualified Data.Set as S
 
 
 -- | What may go wrong when we try to bind a type variable to a type.
-data TVarBindError  = KindMismatch | RecursiveType
+data MguErrorType   = KindMismatch | RecursiveType | ShapeMismatch
                       deriving (Eq,Show)
 
 -- | What may go wrong while computing the most general unifier of two types.
-data MguError       = TVarBindError TVarBindError TRef Type
-                    | TypeMismatch Type Type
+data MguError       = MguError MguErrorType Type Type
                       deriving Eq
+
+instance HasTVars MguError where
+  apTVars f (MguError e t1 t2) = MguError e (apTVars f t1) (apTVars f t2)
+  freeTVars (MguError _ t1 t2) = S.union (freeTVars t1) (freeTVars t2)
 
 -- | A substitution associating type variables with terms.
 newtype Subst       = Su (M.IntMap (Type, String))
@@ -47,11 +50,11 @@ mgu (TApp s1 s2) (TApp t1 t2) =
       (su2,errs2) = mgu (apS su1 s2) (apS su1 t2)
   in (compS su2 su1, errs1 ++ errs2)
 mgu (TCon c) (TCon d) | c == d  = (emptyS, [])
-mgu t1 t2 = (emptyS, [TypeMismatch t1 t2])
+mgu t1 t2 = (emptyS, [MguError ShapeMismatch t1 t2])
 
 bindVar :: TRef -> Type -> (Subst, [MguError])
 bindVar x t = case singleS x t of
-                Left err -> (emptyS, [TVarBindError err x t])
+                Left err -> (emptyS, [MguError err (TVar x) t])
                 Right s  -> (s, [])
 
 
@@ -103,7 +106,7 @@ mergeS (Su su1) (Su su2)
 emptyS :: Subst
 emptyS = Su M.empty
 
-singleS :: TRef -> Type -> Either TVarBindError Subst
+singleS :: TRef -> Type -> Either MguErrorType Subst
 singleS x (TVar y) | x == y                   = Right emptyS
 singleS v t        | kindOf v /= kindOf t     = Left KindMismatch
 singleS v t        | v `S.member` freeTVars t = Left RecursiveType
