@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+module HMTypes.Example.Decls where
 
 import HMType.AST
 import HMType.Subst
