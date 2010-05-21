@@ -35,28 +35,29 @@ lookupS :: TRef -> Subst -> Maybe Type
 lookupS (TR x _) (Su m) = fst `fmap` M.lookup x m
 
 -- | Compute the most general unifier of two terms, if possible.
-mgu :: Type -> Type -> Either MguError Subst
+-- If the list of errors is empty, then the first component is
+-- the most general unifier.  Otherwise, we return a "best-effort"
+-- partial unifier.  This may be useful to support reporing multiple
+-- errors.
+mgu :: Type -> Type -> (Subst, [MguError])
 mgu (TVar x) t = bindVar x t
 mgu t (TVar x) = bindVar x t
 mgu (TApp s1 s2) (TApp t1 t2) =
-  case mgu s1 t1 of
-    Left err -> Left err
-    Right su1 ->
-      case mgu (apS su1 s2) (apS su1 t2) of
-        Left err  -> Left err
-        Right su2 -> Right (compS su2 su1) 
-mgu (TCon c) (TCon d) | c == d  = Right emptyS
-mgu t1 t2 = Left (TypeMismatch t1 t2)
+  let (su1,errs1) = mgu s1 t1
+      (su2,errs2) = mgu (apS su1 s2) (apS su1 t2)
+  in (compS su2 su1, errs1 ++ errs2)
+mgu (TCon c) (TCon d) | c == d  = (emptyS, [])
+mgu t1 t2 = (emptyS, [TypeMismatch t1 t2])
 
-bindVar :: TRef -> Type -> Either MguError Subst
+bindVar :: TRef -> Type -> (Subst, [MguError])
 bindVar x t = case singleS x t of
-                Left err -> Left (TVarBindError err x t)
-                Right s  -> Right s
-              
+                Left err -> (emptyS, [TVarBindError err x t])
+                Right s  -> (s, [])
+
 
 -- | Check if a type pattern (1st argument) matches a type (2nd argument).
 -- Unification variables in the type are treated as constants:
--- 
+--
 --   * they are equal only to themselves,
 --
 --   * they cannot be bound, and
