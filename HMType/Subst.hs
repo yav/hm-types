@@ -43,18 +43,18 @@ lookupS (TR x _) (Su m) = fst `fmap` M.lookup x m
 -- partial unifier.  This may be useful to support reporing multiple
 -- errors.
 mgu :: Type -> Type -> (Subst, [MguError])
-mgu (TVar x) t = bindVar x t
-mgu t (TVar x) = bindVar x t
+mgu (TAtom TVar x) t = bindVar x t
+mgu t (TAtom TVar x) = bindVar x t
 mgu (TApp s1 s2) (TApp t1 t2) =
   let (su1,errs1) = mgu s1 t1
       (su2,errs2) = mgu (apS su1 s2) (apS su1 t2)
   in (compS su2 su1, errs1 ++ errs2)
-mgu (TCon c) (TCon d) | c == d  = (emptyS, [])
+mgu (TAtom TCon c) (TAtom TCon d) | c == d  = (emptyS, [])
 mgu t1 t2 = (emptyS, [MguError ShapeMismatch t1 t2])
 
 bindVar :: TRef -> Type -> (Subst, [MguError])
 bindVar x t = case singleS x t of
-                Left err -> (emptyS, [MguError err (TVar x) t])
+                Left err -> (emptyS, [MguError err (TAtom TVar x) t])
                 Right s  -> (s, [])
 
 
@@ -79,14 +79,14 @@ bindVar x t = case singleS x t of
 --
 --  * @match (/x/,/x/)  ([a], [b])  == Nothing@
 match :: Type -> Type -> Maybe Subst
-match (TVar x) t
+match (TAtom TVar x) t
   | kindOf x /= kindOf t  = Nothing
-match (TVar (TR x (TParam name _))) t   = Just (Su (M.singleton x (t,name)))
+match (TAtom TVar (TR x (TParam name _))) t = Just (Su (M.singleton x (t,name)))
 match (TApp s1 s2) (TApp t1 t2) =
   do su1 <- match s1 t1
      su2 <- match s2 t2
      mergeS su2 su1
-match (TCon c) (TCon d) | c == d  = return emptyS
+match (TAtom TCon c) (TAtom TCon d) | c == d  = return emptyS
 match _ _                         = Nothing
 
 
@@ -107,7 +107,7 @@ emptyS :: Subst
 emptyS = Su M.empty
 
 singleS :: TRef -> Type -> Either MguErrorType Subst
-singleS x (TVar y) | x == y                   = Right emptyS
+singleS x (TAtom TVar y) | x == y             = Right emptyS
 singleS v t        | kindOf v /= kindOf t     = Left KindMismatch
 singleS v t        | v `S.member` freeTVars t = Left RecursiveType
 singleS (TR x (TParam name _)) t        = Right (Su (M.singleton x (t,name)))

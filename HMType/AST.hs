@@ -1,6 +1,7 @@
 module HMType.AST
   ( -- * Types
     Type(..)
+  , Atom(..)
   , Kind
   , splitTApp
   , Pred
@@ -25,10 +26,14 @@ import qualified Data.Set as S
 
 --------------------------------------------------------------------------------
 -- | Simple types.
-data Type = TApp Type Type  -- ^ Type application
-          | TCon TRef       -- ^ Type constructor
-          | TVar TRef       -- ^ Unification variable
-          | TGen TRef       -- ^ Generic variable
+data Type = TApp Type Type    -- ^ Type application
+          | TAtom Atom TRef
+            deriving (Eq,Show)
+
+-- | The shapes of atomic types.
+data Atom = TCon  -- ^ Type constant
+          | TVar  -- ^ Unification variable (unknown type).
+          | TGen  -- ^ Generic variable (placeholder in a schema).
             deriving (Eq,Show)
 
 -- | Kinds, classifing types.
@@ -58,10 +63,10 @@ data TParam       = TParam String Kind
 
 -- | Split-off all type applications.
 -- The first component of the result will not be an application node.
-splitTApp :: Type -> (Type, [Type])
+splitTApp :: Type -> (Atom, TRef, [Type])
 splitTApp t  = split t []
   where split (TApp t1 t2) ts = split t1 (t2 : ts)
-        split tf ts           = (tf, ts)
+        split (TAtom a r) ts  = (a,r,ts)
 
 -- | The type of qualified entities.
 data Qual a = Forall [TParam] [Pred] a
@@ -92,11 +97,9 @@ instance KindOf TRef where
 instance KindOf Type where
   kindOf ty =
     case ty of
-      TCon tcon   -> kindOf tcon
-      TVar tvar   -> kindOf tvar
-      TGen tvar   -> kindOf tvar
-      TApp t1 _   -> do TApp _ res <- kindOf t1
-                        return res
+      TAtom _ r -> kindOf r
+      TApp t1 _ -> do TApp _ res <- kindOf t1
+                      return res
 
 --------------------------------------------------------------------------------
 
@@ -108,17 +111,21 @@ class HasTVars t where
 instance HasTVars Type where
   apTVars su ty =
     case ty of
-      TVar tvar   -> fromMaybe ty (su tvar)
-      TApp t1 t2  -> TApp (apTVars su t1) (apTVars su t2)
-      TGen _      -> ty
-      TCon _      -> ty
+      TApp t1 t2 -> TApp (apTVars su t1) (apTVars su t2)
+      TAtom atom tvar ->
+        case atom of
+          TVar -> fromMaybe ty (su tvar)
+          TGen -> ty
+          TCon -> ty
 
   freeTVars ty =
     case ty of
-      TVar tvar   -> S.singleton tvar
       TApp t1 t2  -> S.union (freeTVars t1) (freeTVars t2)
-      TGen _      -> S.empty
-      TCon _      -> S.empty
+      TAtom atom r ->
+        case atom of
+          TVar -> S.singleton r
+          TGen -> S.empty
+          TCon -> S.empty
 
 instance HasTVars t => HasTVars [t] where
   apTVars su xs = map (apTVars su) xs
@@ -137,7 +144,7 @@ class HasGVars t where
 instVar :: TParam -> [Type] -> Int -> Type
 instVar _ (t : _)  0 = t
 instVar p (_ : ts) n = instVar p ts (n-1)
-instVar p []       n = TGen (TR n p)
+instVar p []       n = TAtom TGen (TR n p)
 
 
 avoidCapture :: [TParam] -> Type -> Type
@@ -151,10 +158,12 @@ avoidCapture as = inc
   rename p                              = p
 
   inc ty = case ty of
-             TGen (TR x p)  -> TGen (TR (x + bound) (rename p))
-             TVar _         -> ty
-             TCon _         -> ty
-             TApp t1 t2     -> TApp (inc t1) (inc t2)
+             TApp t1 t2 -> TApp (inc t1) (inc t2)
+             TAtom atom (TR x p) ->
+               case atom of
+                 TGen -> TAtom TGen (TR (x + bound) (rename p))
+                 TVar -> ty
+                 TCon -> ty
 
 
 
@@ -163,10 +172,12 @@ avoidCapture as = inc
 instance HasGVars Type where
   apGVars su ty =
     case ty of
-      TGen (TR n p)  -> instVar p su n
-      TApp t1 t2     -> TApp (apGVars su t1) (apGVars su t2)
-      TCon _         -> ty
-      TVar _         -> ty
+      TApp t1 t2 -> TApp (apGVars su t1) (apGVars su t2)
+      TAtom atom (TR n p) ->
+        case atom of
+          TGen -> instVar p su n
+          TCon -> ty
+          TVar -> ty
 
 instance HasGVars t => HasGVars [t] where
   apGVars su xs  = map (apGVars su) xs
@@ -174,7 +185,7 @@ instance HasGVars t => HasGVars [t] where
 instance HasGVars t => HasGVars (Qual t) where
   apGVars su (Forall as ps t) = Forall as (apGVars su1 ps) (apGVars su1 t)
     where su1 = zipWith unchanged [0..] as ++ map (avoidCapture as) su
-          unchanged n p = TGen (TR n p)
+          unchanged n p = TAtom TGen (TR n p)
 
 
 --------------------------------------------------------------------------------
@@ -195,10 +206,8 @@ instance HasKinds TRef where
 instance HasKinds Type where
   mapKinds f ty =
     case ty of
-      TApp t1 t2  -> TApp (mapKinds f t1) (mapKinds f t2)
-      TCon tcon   -> TCon (mapKinds f tcon)
-      TVar tvar   -> TVar (mapKinds f tvar)
-      TGen tvar   -> TGen (mapKinds f tvar)
+      TApp t1 t2    -> TApp (mapKinds f t1) (mapKinds f t2)
+      TAtom atom r  -> TAtom atom (mapKinds f r)
 
 instance HasKinds t => HasKinds [t] where
   mapKinds f xs  = map (mapKinds f) xs
@@ -216,9 +225,11 @@ instance HasTCons Type where
   mapTCons f ty =
     case ty of
       TApp t1 t2  -> TApp (mapTCons f t1) (mapTCons f t2)
-      TCon tcon   -> TCon (f tcon)
-      TVar _      -> ty
-      TGen _      -> ty
+      TAtom atom r ->
+        case atom of
+          TCon -> TAtom TCon (f r)
+          TVar -> ty
+          TGen -> ty
 
 instance HasTCons t => HasTCons [t] where
   mapTCons f xs  = map (mapTCons f) xs
