@@ -4,6 +4,7 @@ module HMType.AST
   , Atom(..)
   , Kind
   , splitTApp
+  , tApp
   , Pred
   , TParam(..)
   , TRef (..)
@@ -67,6 +68,11 @@ splitTApp :: Type -> (Atom, TRef, [Type])
 splitTApp t  = split t []
   where split (TApp t1 t2) ts = split t1 (t2 : ts)
         split (TAtom a r) ts  = (a,r,ts)
+
+-- | Apply a type to the given type arguments.
+-- A convenience function.
+tApp :: Type -> [Type] -> Type
+tApp = foldl TApp
 
 -- | The type of qualified entities.
 data Qual a = Forall [TParam] [Pred] a
