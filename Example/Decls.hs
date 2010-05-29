@@ -107,7 +107,7 @@ generalize ps t =
          -- signature needed due to the monomorhism restriction
          apS :: HasTVars t => t -> t
          apS  = apTVars $ \x@(TR _ p) -> do n <- elemIndex x as
-                                            return $ TGen $ TR n p
+                                            return $ TAtom TGen $ TR n p
 
      addPreds externalPreds
      return ([ a | TR _ a <- as ], apS localPreds, apS t)
@@ -140,11 +140,12 @@ inferExpr expr =
 --------------------------------------------------------------------------------
 mono          = Forall [] []
 
-kStar         = TCon $ TR 0 $ TParam "*"  $ Nothing
-kcFun         = TCon $ TR 1 $ TParam "->" $ Nothing
+kStar         = TAtom TCon $ TR 0 $ TParam "*"  $ Nothing
+kcFun         = TAtom TCon $ TR 1 $ TParam "->" $ Nothing
 kFun k1 k2    = kcFun `TApp` k1 `TApp` k2
 
-tcFun         = TCon $ TR 0 $ TParam "->" $ Just $ kFun kStar $ kFun kStar kStar
+tcFun         = TAtom TCon $ TR 0 $ TParam "->"
+                           $ Just $ kFun kStar $ kFun kStar kStar
 tFun t1 t2    = tcFun `TApp` t1 `TApp` t2
 --------------------------------------------------------------------------------
 
@@ -227,7 +228,7 @@ newTVar k   = TI $
   do s <- get
      let n = names s
      set s { names = n + 1 }
-     return $ TVar $ TR n $ TParam ('?' : show n) $ Just k
+     return $ TAtom TVar $ TR n $ TParam "" $ Just k
 
 unify t1 t2 =
   do s <- TI $ get
@@ -241,6 +242,7 @@ unify t1 t2 =
 lkpEnv x (E m)  = Map.lookup x m
 emptyEnv        = E Map.empty
 singleEnv x s   = E $ Map.singleton x s
+listEnv (E m)   = Map.toList m
 
 instance HasTVars Env where
   apTVars f (E m) = E $ Map.map (apTVars f) m
