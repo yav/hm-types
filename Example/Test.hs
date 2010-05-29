@@ -1,8 +1,10 @@
 import HMType.AST
-import HMType.Example.Decls
+import Example.Decls
 import Text.Show.Pretty
 
-test d = putStrLn $ ppShow $ runTI $ inferDecl d
+main = ex1
+
+test d = writeFile "out.hs" $ ppShow $ runTI $ inferDecl d
 
 
 ex1 = test $ DRec $ DDef x $ EVar x
