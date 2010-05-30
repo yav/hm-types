@@ -38,7 +38,7 @@ data Atom = TCon  -- ^ Type constant
             deriving (Eq,Show)
 
 -- | Kinds, classifing types.
-type Kind = Maybe Type
+type Kind = Type
 
 -- | Predicates, restricting polymorphism.
 type Pred = Type
@@ -58,7 +58,7 @@ instance Ord TRef where
 -- | Type \"paramaters\".
 -- A sugegsted name for display purposes, together with the type (kind)
 -- of a parameter.
-data TParam       = TParam String Kind
+data TParam       = TParam String (Maybe Kind)
                     deriving Show
 
 
@@ -92,7 +92,7 @@ instance NameOf TRef where
 
 -- | This class defines a method for accessing the kind of something.
 class KindOf t where
-  kindOf :: t -> Kind
+  kindOf :: t -> Maybe Kind
 
 instance KindOf TParam where
   kindOf (TParam _ k) = k
@@ -200,7 +200,7 @@ instance HasGVars t => HasGVars (Qual t) where
 
 -- | Apply a function to all the kinds in the given entity.
 class HasKinds t where
-  mapKinds :: (Kind -> Kind) -> t -> t
+  mapKinds :: (Maybe Kind -> Maybe Kind) -> t -> t
 
 instance HasKinds TParam where
   mapKinds f (TParam s k) = TParam s (f k)
