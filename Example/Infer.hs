@@ -1,24 +1,25 @@
 module Example.Infer (infer) where
 
 import Example.Decls
-import qualified Example.Infer.Env as Env
-import Example.Infer.Env(Env)
-import Example.Infer.Monad
-import Example.Infer.Error
 import Example.Type
+import qualified HM.Infer.Env as Env
+import HM.Infer.Monad
+import HM.Infer.Error
 
-import HMType.AST
+import HM.Type.AST
 
-import MonadLib
 import qualified Data.Set as Set
-import Data.List
-import Data.Maybe
+import Control.Monad (zipWithM_, liftM, forM)
 
-infer :: Decl -> (Env, [Error], [Pred])
+
+infer :: Decl -> (Env, [Error Name], [Pred])
 infer = runTI . inferDecl
 
 
-inferDeclMono :: Decl -> TI Env
+type Env    = Env.Env Name
+type Infer  = TI Name
+
+inferDeclMono :: Decl -> Infer Env
 inferDeclMono decl =
   case decl of
 
@@ -42,7 +43,7 @@ inferDeclMono decl =
          return env2
 
 
-inferDecl :: Decl -> TI Env
+inferDecl :: Decl -> Infer Env
 inferDecl decl =
   case decl of
 
@@ -66,7 +67,7 @@ inferDecl decl =
          zipWithM_ unify (monoEnvTypes env1) (monoEnvTypes env2)
          generalizeEnv ps env2
 
-inferExpr :: Expr -> TI Type
+inferExpr :: Expr -> Infer Type
 inferExpr expr =
   case expr of
 
@@ -94,7 +95,7 @@ inferExpr expr =
 --------------------------------------------------------------------------------
 
 
-monoEnv :: Decl -> TI Env
+monoEnv :: Decl -> Infer Env
 monoEnv d = liftM Env.fromList
           $ forM (Set.toList (defs d))
           $ \x -> do t <- newTVar kStar
@@ -106,15 +107,7 @@ fromMonoSchema (Forall _ _ t) = t
 monoEnvTypes :: Env -> [Type]
 monoEnvTypes env = map (fromMonoSchema . snd) $ Env.toList env
 
-
-defs :: Decl -> Set.Set Name
-defs decl = case decl of
-              DAnd d1 d2  -> Set.union (defs d1) (defs d2)
-              DLet _ d    -> defs d
-              DRec d      -> defs d
-              DDef x _    -> Set.singleton x
-
-generalizeEnv :: [Pred] -> Env -> TI Env
+generalizeEnv :: [Pred] -> Env -> Infer Env
 generalizeEnv ps env =
   do let (xs,ss) = unzip $ Env.toList env
      Forall as ps1 ts1 <- generalize ps (map fromMonoSchema ss)
@@ -122,42 +115,7 @@ generalizeEnv ps env =
      return $ Env.fromList $ zipWith toS xs ts1
 
 
-generalize :: HasTVars t => [Pred] -> t -> TI (Qual t)
-generalize ps t =
-  do env <- getEnv
-     let envVars    = freeTVars env
-         genVars    = freeTVars t `Set.difference` envVars
-         isExtern p = Set.null (freeTVars p `Set.intersection` genVars)
-         (externalPreds, localPreds) = partition isExtern ps
-
-         as   = Set.toList genVars
-
-         -- signature needed due to the monomorhism restriction
-         apSu :: HasTVars t => t -> t
-         apSu  = apTVars $ \x@(TR _ p) -> do n <- elemIndex x as
-                                             return $ TAtom TGen $ TR n p
-
-     addPreds externalPreds
-     return $ Forall [ a | TR _ a <- as ] (apSu localPreds) (apSu t)
-
-
-
-
-
-mergeEnv :: Env -> Env -> TI Env
-mergeEnv e1 e2 =
-  do let (e3, redef) = Env.union e1 e2
-     unless (Set.null redef) $ addErrs [ MultipleDefinitions redef ]
-     return e3
-
--- By this point, all as should have kinds.
-instantiate :: Schema -> TI Type
-instantiate (Forall as ps t) =
-  do ts <- mapM newTVar $ mapMaybe kindOf as
-     addPreds $ map (apGVars ts) ps
-     return $ apGVars ts t
-
-lookupVar :: Name -> TI Schema
+lookupVar :: Ord n => n -> TI n Schema
 lookupVar x =
   do env <- getEnv
      case Env.lookup x env of
@@ -170,6 +128,5 @@ lookupVar x =
         do t <- newTVar kStar
            addErrs [ UndefinedVariable x t ]
            return $ mono t
-
 
 

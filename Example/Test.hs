@@ -1,8 +1,8 @@
 import Example.Decls
 import Example.Infer
-import qualified Example.Infer.Env as Env (Env, toList)
+import qualified HM.Infer.Env as Env (Env, toList)
 
-import HMType.Pretty
+import HM.Type.Pretty
 import Text.PrettyPrint
 
 main :: IO ()
@@ -22,7 +22,7 @@ ex1 :: Decl
 ex1 = DRec $ DDef x $ EFun x (EVar x) `EApp` EVar x
   where x = Name "x"
 
-ppEnv :: Env.Env -> Doc
+ppEnv :: Env.Env Name -> Doc
 ppEnv m = vcat $ map ppSig $ Env.toList m
   where ppSig (Name x,s) = text x <+> text "::" <+> ppQual ppType s
 

@@ -1,6 +1,6 @@
-module HMType.Pretty where
+module HM.Type.Pretty where
 
-import HMType.AST
+import HM.Type.AST
 import Text.PrettyPrint
 
 ppQual :: (t -> Doc) -> Qual t -> Doc

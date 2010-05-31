@@ -1,6 +1,6 @@
 module Example.Type where
 
-import HMType.AST
+import HM.Type.AST
 
 type Schema   = Qual Type
 

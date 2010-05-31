@@ -1,4 +1,4 @@
-module HMType.AST
+module HM.Type.AST
   ( -- * Types
     Type(..)
   , Atom(..)

@@ -1,4 +1,4 @@
-module HMType.Subst
+module HM.Type.Subst
   ( Subst
   , apS
   , lookupS
@@ -13,7 +13,7 @@ module HMType.Subst
   , MguError(..)
   ) where
 
-import HMType.AST
+import HM.Type.AST
 import qualified Data.IntMap as M
 import qualified Data.Set as S
 

@@ -1,19 +1,17 @@
-module Example.Infer.Error where
+module HM.Infer.Error where
 
-import Example.Decls (Name)
-
-import HMType.AST
-import HMType.Subst
+import HM.Type.AST
+import HM.Type.Subst
 
 import qualified Data.Set as Set
 
 
-data Error    = UndefinedVariable Name Type
+data Error n  = UndefinedVariable n Type
               | UnificationError MguError
-              | MultipleDefinitions (Set.Set Name)
+              | MultipleDefinitions (Set.Set n)
                 deriving Show
 
-instance HasTVars Error where
+instance HasTVars (Error n) where
   apTVars f err =
     case err of
       UndefinedVariable x t -> UndefinedVariable x (apTVars f t)
