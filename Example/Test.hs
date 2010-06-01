@@ -1,4 +1,4 @@
-import Example.Decls
+import Example.AST
 import Example.Infer
 import qualified HM.Infer.Env as Env (Env, toList)
 

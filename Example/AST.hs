@@ -1,4 +1,4 @@
-module Example.Decls where
+module Example.AST where
 
 import qualified Data.Set as Set
 

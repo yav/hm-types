@@ -1,6 +1,6 @@
 module Example.Infer (infer) where
 
-import Example.Decls
+import Example.AST
 import Example.Type
 import qualified HM.Infer.Env as Env
 import HM.Infer.Monad
