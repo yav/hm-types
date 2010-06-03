@@ -30,7 +30,7 @@ inferDeclMono decl =
     DAnd d1 d2 ->
       do env1 <- inferDeclMono d1
          env2 <- inferDeclMono d2
-         mergeEnv env1 env2
+         mergeEnv [env1,env2]
 
     DDef x e ->
       do t <- inferExpr e
@@ -54,10 +54,10 @@ inferDecl decl =
     DAnd d1 d2 ->
       do env1 <- inferDecl d1
          env2 <- inferDecl d2
-         mergeEnv env1 env2
+         mergeEnv [env1,env2]
 
     DDef x e ->
-      do (t,ps) <- getPreds $ inferExpr e
+      do (t,ps) <- getPreds (inferExpr e)
          s <- generalize ps t
          return $ Env.singleton x s
 
@@ -91,6 +91,62 @@ inferExpr expr =
       do env <- inferDecl d
          inExtEnv env (inferExpr e)
 
+    ECase m ->
+      inferMat m
+
+
+inferPat :: Pat -> Infer (Type, Env)
+inferPat pat =
+  case pat of
+
+    PVar x ->
+      do t <- newTVar kStar
+         return (t, Env.singleton x (mono t))
+
+    PWild ->
+      do t <- newTVar kStar
+         return (t, Env.empty)
+
+    PCon c ps ->
+      do (ts,envs) <- unzip `liftM` mapM inferPat ps
+         t1 <- instantiate =<< lookupVar c
+         a  <- newTVar kStar
+         unify t1 (foldr tFun a ts)
+         env <- mergeEnv envs
+         return (a, env)
+
+
+inferGrd :: Grd -> Infer Env
+inferGrd grd =
+  case grd of
+
+    GPat p e  ->
+      do (t1,env) <- inferPat p
+         t2       <- inferExpr e
+         unify t1 t2
+         return env
+
+    GLet d -> inferDecl d
+
+
+inferMat :: Mat -> Infer Type
+inferMat mat =
+  case mat of
+
+    MIs e ->
+      inferExpr e
+
+    MGrd g m  ->
+      do env <- inferGrd g
+         inExtEnv env (inferMat m)
+
+    MOr m1 m2 ->
+      do t1 <- inferMat m1
+         t2 <- inferMat m2
+         unify t1 t2
+         return t1
+ 
+    
 
 --------------------------------------------------------------------------------
 

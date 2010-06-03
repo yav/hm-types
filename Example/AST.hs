@@ -15,7 +15,24 @@ data Expr       = EApp Expr Expr
                 | EFun Name Expr
                 | EVar Name
                 | ELet Decl Expr
+                | ECase Mat
                   deriving Show
+
+data Pat        = PVar Name
+                | PWild
+                | PCon Name [Pat]
+                  deriving Show
+
+data Grd        = GPat Pat Expr
+                | GLet Decl
+                  deriving Show
+
+data Mat        = MIs Expr
+                | MGrd Grd Mat
+                | MOr Mat Mat
+                  deriving Show
+    
+
 
 defs :: Decl -> Set.Set Name
 defs decl = case decl of

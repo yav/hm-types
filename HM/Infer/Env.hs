@@ -4,6 +4,7 @@ module HM.Infer.Env
   , lookup
   , singleton
   , union
+  , unions
   , toList
   , fromList
   ) where
@@ -37,6 +38,13 @@ fromList xs     = E (Map.fromList xs)
 union          :: Ord n => Env n -> Env n -> (Env n, Set.Set n)
 union (E m1) (E m2)  = (E (Map.union m1 m2), redef)
   where redef = Map.keysSet (Map.intersection m1 m2)
+
+-- | Left biased
+unions         :: Ord n => [Env n] -> (Env n, Set.Set n)
+unions          = foldr jn (empty, Set.empty)
+  where jn env (env1, redef1) = let (env2, redef2) = union env env1
+                                in (env2, Set.union redef2 redef1) 
+       
 
 instance Ord n => HasTVars (Env n) where
   apTVars f (E m) = E $ Map.map (apTVars f) m

@@ -117,11 +117,11 @@ generalize ps t =
 
 
 
-mergeEnv :: Ord n => Env n -> Env n -> TI n (Env n)
-mergeEnv e1 e2 =
-  do let (e3, redef) = Env.union e1 e2
+mergeEnv :: Ord n => [Env n] -> TI n (Env n)
+mergeEnv es =
+  do let (e1, redef) = Env.unions es
      unless (Set.null redef) $ addErrs [ MultipleDefinitions redef ]
-     return e3
+     return e1
 
 -- By this point, all as should have kinds.
 instantiate :: HasGVars t => Qual t -> TI n t
