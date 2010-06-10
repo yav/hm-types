@@ -42,3 +42,14 @@ defs decl = case decl of
               DDef x _  -> Set.singleton x
 
 
+splitFun :: Expr -> ([Name],Expr)
+splitFun (EFun x e) = (x:xs,e1)
+  where (xs,e1) = splitFun e
+splitFun e = ([], e)
+
+
+splitApp :: Expr -> (Expr, [Expr])
+splitApp e = loop e []
+  where loop (EApp e1 e2) es  = loop e1 (e2 : es)
+        loop e1 es            = (e1,es)
+
