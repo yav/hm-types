@@ -6,7 +6,7 @@ data Name       = Name String
                   deriving (Show,Eq,Ord)
 
 data Decl       = DLet Decl Decl
-                | DAnd Decl Decl
+                | DAnd [Decl]
                 | DRec Decl
                 | DDef Name Expr
                   deriving Show
@@ -36,9 +36,9 @@ data Mat        = MIs Expr
 
 defs :: Decl -> Set.Set Name
 defs decl = case decl of
-              DAnd d1 d2  -> Set.union (defs d1) (defs d2)
-              DLet _ d    -> defs d
-              DRec d      -> defs d
-              DDef x _    -> Set.singleton x
+              DAnd ds   -> Set.unions (map defs ds)
+              DLet _ d  -> defs d
+              DRec d    -> defs d
+              DDef x _  -> Set.singleton x
 
 

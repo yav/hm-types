@@ -27,10 +27,8 @@ inferDeclMono decl =
       do env  <- inferDecl d1
          inExtEnv env $ inferDeclMono d2
 
-    DAnd d1 d2 ->
-      do env1 <- inferDeclMono d1
-         env2 <- inferDeclMono d2
-         mergeEnv [env1,env2]
+    DAnd ds ->
+      mergeEnv =<< mapM inferDeclMono ds
 
     DDef x e ->
       do t <- inferExpr e
@@ -51,10 +49,8 @@ inferDecl decl =
       do env  <- inferDecl d1
          inExtEnv env (inferDecl d2)
 
-    DAnd d1 d2 ->
-      do env1 <- inferDecl d1
-         env2 <- inferDecl d2
-         mergeEnv [env1,env2]
+    DAnd ds ->
+      mergeEnv =<< mapM inferDecl ds
 
     DDef x e ->
       do (t,ps) <- getPreds (inferExpr e)
