@@ -25,21 +25,18 @@ import Data.List(elemIndex, partition)
 import Data.Maybe(mapMaybe)
 
 
-data R n      = R (Env n)
-type W        = Seq.Seq Pred
-data S        = S { subst         :: Subst
+data S c      = S { subst         :: Subst c
                   , names         :: Int
                   }
 
-newtype TI n a= TI (ReaderT (R n)
-                   (WriterT W
-                   (WriterT (Seq.Seq (Error n))
-                   (StateT S
-                     Id))) a)
-                deriving (Monad)
+newtype TI c n a  = TI (ReaderT (Env c n)
+                       (WriterT (Seq.Seq (Pred c))
+                       (WriterT (Seq.Seq (Error c n))
+                       (StateT (S c)
+                         Id))) a) deriving (Monad)
 
 
-runTI :: HasTVars a => TI n a -> (a, [Error n], [Pred])
+runTI :: HasTVars a c => TI c n a -> (a, [Error c n], [Pred c])
 runTI (TI m)  = (apSu a, apSu (seqToList errs), apSu (seqToList ps))
   where
   apSu x = apTVars (`lookupS` subst s) x
@@ -48,33 +45,33 @@ runTI (TI m)  = (apSu a, apSu (seqToList errs), apSu (seqToList ps))
     $ runStateT S { subst = emptyS, names = 0 }
     $ runWriterT
     $ runWriterT
-    $ runReaderT (R Env.empty) m
+    $ runReaderT Env.empty m
 
 
-addErrs        :: [Error n] -> TI n ()
+addErrs        :: [Error c n] -> TI c n ()
 addErrs es      = TI $ lift $ lift $ put $ Seq.fromList es
 
-addPreds       :: [Pred] -> TI n ()
+addPreds       :: [Pred c] -> TI c n ()
 addPreds ps     = TI $ put $ Seq.fromList ps
 
-getPreds       :: TI n a -> TI n (a, [Pred])
+getPreds       :: TI c n a -> TI c n (a, [Pred c])
 getPreds (TI m) = TI $
   do (a,ps) <- collect m
      return (a, seqToList ps)
 
-inExtEnv :: Ord n => Env n -> TI n a -> TI n a
+inExtEnv :: Ord n => Env c n -> TI c n a -> TI c n a
 inExtEnv env (TI m) = TI $
-  do R envOld <- ask
-     local (R $ fst $ Env.union env envOld) m
+  do envOld <- ask
+     local (fst $ Env.union env envOld) m
 
-newTVar :: Kind -> TI n Type
+newTVar :: Kind c -> TI c n (Type c)
 newTVar k = TI $
   do s <- get
      let n = names s
      set s { names = n + 1 }
-     return $ TAtom TVar $ TR n $ TParam "" $ Just k
+     return $ TVar $ TV n $ TParam "" $ Just k
 
-unify :: Type -> Type -> TI n ()
+unify :: IsTCon c => Type c -> Type c -> TI c n ()
 unify t1 t2 =
   do s <- TI $ get
      let su1        = subst s
@@ -84,9 +81,9 @@ unify t1 t2 =
      TI $ set s { subst = compS su2 su1 }
      addErrs $ map UnificationError errs
 
-getEnv :: TI n (Env n)
+getEnv :: TI c n (Env c n)
 getEnv = TI $
-  do R env <- ask
+  do env <- ask
      return env
 
 seqToList :: Seq.Seq a -> [a]
@@ -95,7 +92,7 @@ seqToList = Seq.foldrWithIndex (const (:)) []
 
 
 --------------------------------------------------------------------------------
-generalize :: (Ord n, HasTVars t) => [Pred] -> t -> TI n (Qual t)
+generalize :: (Ord n, HasTVars t c) => [Pred c] -> t -> TI c n (Qual c t)
 generalize ps t =
   do env <- getEnv
      let envVars    = freeTVars env
@@ -103,28 +100,25 @@ generalize ps t =
          isExtern p = Set.null (freeTVars p `Set.intersection` genVars)
          (externalPreds, localPreds) = partition isExtern ps
 
-         as   = Set.toList genVars
-
-         -- signature needed due to the monomorhism restriction
-         apSu :: HasTVars t => t -> t
-         apSu  = apTVars $ \x@(TR _ p) -> do n <- elemIndex x as
-                                             return $ TAtom TGen $ TR n p
+         as     = Set.toList genVars
+         apSu z = apTVars (\x@(TV _ p) -> do n <- elemIndex x as
+                                             return $ TGen $ GV n p) z
 
      addPreds externalPreds
-     return $ Forall [ a | TR _ a <- as ] (apSu localPreds) (apSu t)
+     return $ Forall [ a | TV _ a <- as ] (apSu localPreds) (apSu t)
 
 
 
 
 
-mergeEnv :: Ord n => [Env n] -> TI n (Env n)
+mergeEnv :: Ord n => [Env c n] -> TI c n (Env c n)
 mergeEnv es =
   do let (e1, redef) = Env.unions es
      unless (Set.null redef) $ addErrs [ MultipleDefinitions redef ]
      return e1
 
 -- By this point, all as should have kinds.
-instantiate :: HasGVars t => Qual t -> TI n t
+instantiate :: HasGVars t c => Qual c t -> TI c n t
 instantiate (Forall as ps t) =
   do ts <- mapM newTVar $ mapMaybe kindOf as
      addPreds $ map (apGVars ts) ps

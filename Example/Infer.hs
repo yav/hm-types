@@ -6,18 +6,18 @@ import qualified HM.Infer.Env as Env
 import HM.Infer.Monad
 import HM.Infer.Error
 
-import HM.Type.AST
+import HM.Type.AST(Qual(..))
 
 import qualified Data.Set as Set
 import Control.Monad (zipWithM_, liftM, forM)
 
 
-infer :: Decl -> (Env, [Error Name], [Pred])
+infer :: Decl -> (Env, [Error TCon Name], [Pred])
 infer = runTI . inferDecl
 
 
-type Env    = Env.Env Name
-type Infer  = TI Name
+type Env    = Env.Env TCon Name
+type Infer  = TI TCon Name
 
 inferDeclMono :: Decl -> Infer Env
 inferDeclMono decl =
@@ -167,7 +167,7 @@ generalizeEnv ps env =
      return $ Env.fromList $ zipWith toS xs ts1
 
 
-lookupVar :: Ord n => n -> TI n Schema
+lookupVar :: Name -> Infer Schema
 lookupVar x =
   do env <- getEnv
      case Env.lookup x env of

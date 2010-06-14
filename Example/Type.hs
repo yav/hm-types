@@ -1,27 +1,35 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Example.Type where
 
-import HM.Type.AST
+import qualified HM.Type.AST as HM
+import HM.Type.AST hiding (Schema,Type,Kind,Pred)
 
-type Schema   = Qual Type
+type Schema   = HM.Schema TCon
+type Type     = HM.Type TCon
+type Pred     = HM.Pred TCon
+type Kind     = HM.Kind TCon
+
+
+data TCon     = KStar | KFun
+              | TFun
+                deriving (Eq,Show)
+
+instance KindOf TCon TCon where
+  kindOf KStar  = Nothing
+  kindOf KFun   = Nothing
+  kindOf TFun   = Just $ kFun kStar $ kFun kStar kStar
+
+instance IsTCon TCon
 
 kStar        :: Kind
-kStar         = TAtom TCon $ TR 0 $ TParam "*"  $ Nothing
-
-kcFun        :: Kind
-kcFun         = TAtom TCon $ TR 1 $ TParam "->" $ Nothing
+kStar         = TCon KStar
 
 kFun         :: Kind -> Kind -> Kind
-kFun k1 k2    = kcFun `TApp` k1 `TApp` k2
-
-
-tcFun        :: Type
-tcFun         = TAtom TCon $ TR 0 $ TParam "->"
-                           $ Just $ kFun kStar $ kFun kStar kStar
+kFun k1 k2    = TCon KFun `TApp` k1 `TApp` k2
 
 tFun         :: Type -> Type -> Type
-tFun t1 t2    = tcFun `TApp` t1 `TApp` t2
+tFun t1 t2    = TCon TFun `TApp` t1 `TApp` t2
 
-
-mono         :: Type -> Qual Type
+mono         :: Type -> Schema
 mono          = Forall [] []
 

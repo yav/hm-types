@@ -8,10 +8,14 @@ Build-type:     Simple
 Build-Depends:
   base < 5,
   containers,
-  pretty
+  pretty,
+  monadLib
 Exposed-modules:
-  HMType.AST
-  HMType.Subst
-  HMType.Pretty
+  HM.Type.AST
+  HM.Type.Subst
+  -- HM.Type.Pretty
+  HM.Infer.Env
+  HM.Infer.Error
+  HM.Infer.Monad
 GHC-options:    -O2 -Wall
 

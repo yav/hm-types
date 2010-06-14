@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 module HM.Infer.Error where
 
 import HM.Type.AST
@@ -6,12 +8,12 @@ import HM.Type.Subst
 import qualified Data.Set as Set
 
 
-data Error n  = UndefinedVariable n Type
-              | UnificationError MguError
-              | MultipleDefinitions (Set.Set n)
-                deriving Show
+data Error c n  = UndefinedVariable n (Type c)
+                | UnificationError (MguError c)
+                | MultipleDefinitions (Set.Set n)
+                  deriving Show
 
-instance HasTVars (Error n) where
+instance HasTVars (Error c n) c where
   apTVars f err =
     case err of
       UndefinedVariable x t -> UndefinedVariable x (apTVars f t)
