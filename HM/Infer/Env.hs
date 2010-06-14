@@ -53,4 +53,3 @@ instance Ord n => HasTVars (Env c n) c where
   freeTVars (E m) = Set.unions $ map freeTVars $ Map.elems m
 
 
-

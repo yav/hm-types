@@ -3,6 +3,7 @@ module Example.Type where
 
 import qualified HM.Type.AST as HM
 import HM.Type.AST hiding (Schema,Type,Kind,Pred)
+import HM.Type.Pretty
 
 type Schema   = HM.Schema TCon
 type Type     = HM.Type TCon
@@ -20,6 +21,17 @@ instance KindOf TCon TCon where
   kindOf TFun   = Just $ kFun kStar $ kFun kStar kStar
 
 instance IsTCon TCon
+
+instance PrettyCon TCon where
+  ppCon _ r tcon args =
+    case tcon of
+      KStar -> ppTApp r (char '*') args
+      KFun  -> ppFun
+      TFun  -> ppFun
+    where ppFun = case args of
+                    [t1,t2] -> wrap 5 r (t1 6 <+> text "->" <+> t2 5)
+                    _       -> ppTApp r (text "->") args
+      
 
 kStar        :: Kind
 kStar         = TCon KStar

@@ -1,6 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-module HM.Infer.Error where
+module HM.Infer.Error
+  ( module HM.Infer.Error
+  , MguError(..)
+  , MguErrorType(..)
+  ) where
 
 import HM.Type.AST
 import HM.Type.Subst

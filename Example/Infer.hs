@@ -1,10 +1,15 @@
-module Example.Infer (infer) where
+module Example.Infer
+  (infer
+  , Env
+  , Error
+  ) where
 
 import Example.AST
 import Example.Type
 import qualified HM.Infer.Env as Env
 import HM.Infer.Monad
-import HM.Infer.Error
+import HM.Infer.Error hiding (Error)
+import qualified HM.Infer.Error as HM
 
 import HM.Type.AST(Qual(..))
 
@@ -12,12 +17,13 @@ import qualified Data.Set as Set
 import Control.Monad (zipWithM_, liftM, forM)
 
 
-infer :: Decl -> (Env, [Error TCon Name], [Pred])
+infer :: Decl -> (Env, [Error], [Pred])
 infer = runTI . inferDecl
 
 
 type Env    = Env.Env TCon Name
 type Infer  = TI TCon Name
+type Error  = HM.Error TCon Name
 
 inferDeclMono :: Decl -> Infer Env
 inferDeclMono decl =

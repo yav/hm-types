@@ -13,7 +13,7 @@ Build-Depends:
 Exposed-modules:
   HM.Type.AST
   HM.Type.Subst
-  -- HM.Type.Pretty
+  HM.Type.Pretty
   HM.Infer.Env
   HM.Infer.Error
   HM.Infer.Monad
