@@ -93,8 +93,11 @@ inferExpr expr =
       do env <- inferDecl d
          inExtEnv env (inferExpr e)
 
-    ECase m ->
-      inferMat m
+    ECase m e ->
+      do t1 <- inferMat m
+         t2 <- inferExpr e
+         unify t1 t2
+         return t1
 
 
 inferPat :: Pat -> Infer (Type, Env)

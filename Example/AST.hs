@@ -15,7 +15,7 @@ data Expr       = EApp Expr Expr
                 | EFun Name Expr
                 | EVar Name
                 | ELet Decl Expr
-                | ECase Mat
+                | ECase Mat Expr
                   deriving Show
 
 data Pat        = PVar Name
