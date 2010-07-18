@@ -4,11 +4,23 @@ module Example.Type where
 import qualified HM.Type.AST as HM
 import HM.Type.AST hiding (Schema,Type,Kind,Pred)
 import HM.Type.Pretty
+import qualified Data.Set as Set
 
 type Schema   = HM.Schema TCon
 type Type     = HM.Type TCon
+type PatType  = HM.Qual TCon PatT
 type Pred     = HM.Pred TCon
 type Kind     = HM.Kind TCon
+
+data PatFails = MayFail | MayNotFail
+data PatT     = PatT Type [Type] PatFails
+
+instance HasTVars PatT TCon where
+  apTVars su (PatT t ts f) = PatT (apTVars su t) (apTVars su ts) f
+  freeTVars (PatT t ts _)  = Set.union (freeTVars t) (freeTVars ts)
+
+instance HasGVars PatT TCon where
+  apGVars su (PatT t ts f) = PatT (apGVars su t) (apGVars su ts) f
 
 
 data TCon     = KStar | KFun | KNat

@@ -5,10 +5,10 @@ import HM.Infer.Env as Env (toList)
 import HM.Type.Pretty
 import HM.Infer.Error hiding (Error)
 import qualified Data.Set as Set
-
+import Example.Prelude
 
 main :: IO ()
-main = test ex1
+main = test prelude
 
 test :: Decl -> IO ()
 test d = do putStrLn "Env:"
@@ -20,9 +20,6 @@ test d = do putStrLn "Env:"
   where (env,errs,preds) = infer d
 
 
-ex1 :: Decl
-ex1 = DRec $ DDef x $ EFun x (EVar x `EApp` EVar x) -- `EApp` EVar x
-  where x = Name "x"
 
 
 ppName :: Name -> Doc
@@ -36,10 +33,10 @@ ppError :: Error -> Doc
 ppError err =
   case err of
     UndefinedVariable x t ->
-      text "Undefinde variable " <+> ppName x <+> text "::" <+> pp How 0 t
+      text "Undefinde variable" <+> ppName x <+> text "::" <+> pp How 0 t
 
     MultipleDefinitions n ->
-      text "Multiple definitions of " <+>
+      text "Multiple definitions of" <+>
         fsep (punctuate comma (map ppName (Set.toList n)))
 
     UnificationError (MguError err1 t1 t2) ->
@@ -48,6 +45,27 @@ ppError err =
                     KindMismatch  -> "Kind mismatch:"
                     RecursiveType -> "Recursive type:"
                     ShapeMismatch -> "Shape mismatch:"
+
+    OtherError (PatErr n t e) -> 
+      case e of
+        PatUndefined ts ->
+          (text "Undefined pattern" <+> ppName n <+> text "::" <+> pp How 0 t
+            <+> text "with sub-patterns of type:")
+            $$ ppSub ts
+
+        PatTooManyArgs ts ->
+          (text "Pattern" <+> ppName n <+> text "::" <+> pp How 0 t
+            <+> text "was applied to additional sub-patterns of type:")
+            $$ ppSub ts
+
+        PatTooFewArgs ts ->
+          (text "Pattern" <+> ppName n <+> text "::" <+> pp How 0 t
+            <+> text "requires more sub-patterns of type:")
+            $$ ppSub ts
+
+      where ppSub = nest 2 . vcat . map (pp How 0)
+ 
+
 
  
 

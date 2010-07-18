@@ -52,4 +52,7 @@ instance Ord n => HasTVars (Env c n) c where
   apTVars f (E m) = E $ Map.map (apTVars f) m
   freeTVars (E m) = Set.unions $ map freeTVars $ Map.elems m
 
+instance Ord n => HasGVars (Env c n) c where
+  apGVars f (E m) = E $ Map.map (apGVars f) m
+
 

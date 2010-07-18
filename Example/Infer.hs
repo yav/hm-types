@@ -2,14 +2,15 @@ module Example.Infer
   (infer
   , Env
   , Error
+  , Err(..)
+  , PatErr(..)
   ) where
 
 import Example.AST
 import Example.Type
+import Example.Monad
 import qualified HM.Infer.Env as Env
-import HM.Infer.Monad
 import HM.Infer.Error hiding (Error)
-import qualified HM.Infer.Error as HM
 
 import HM.Type.AST(Qual(..))
 
@@ -19,11 +20,6 @@ import Control.Monad (zipWithM_, liftM, forM)
 
 infer :: Decl -> (Env, [Error], [Pred])
 infer = runTI . inferDecl
-
-
-type Env    = Env.Env TCon Name
-type Infer  = TI TCon Name
-type Error  = HM.Error TCon Name
 
 inferDeclMono :: Decl -> Infer Env
 inferDeclMono decl =
@@ -114,11 +110,9 @@ inferPat pat =
 
     PCon c ps ->
       do (ts,envs) <- unzip `liftM` mapM inferPat ps
-         t1 <- instantiate =<< lookupVar c
-         a  <- newTVar kStar
-         unify t1 (foldr tFun a ts)
          env <- mergeEnv envs
-         return (a, env)
+         t   <- lookupPat c ts
+         return (t, env)
 
 
 inferGrd :: Grd -> Infer Env
